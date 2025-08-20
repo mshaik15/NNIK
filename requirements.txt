@@ -1,0 +1,11 @@
+# .venv\Scripts\activate <---- To activate the virtual environment
+# pip install -r requirements.txt
+numpy==1.26.4
+torch==2.3.0
+scikit-learn==1.5.1
+matplotlib==3.9.1
+tqdm==4.66.4
+pyyaml==6.0.1
+joblib==1.4.2
+stable-baselines3==2.3.0
+gymnasium==0.29.1
