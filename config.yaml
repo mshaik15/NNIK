@@ -1,0 +1,35 @@
+# Global settings for the IK benchmarking pipeline
+
+# Range of degrees of freedom to test
+dof_range: [3, 10]
+
+# Dataset sizes
+train_samples: 2000
+test_samples: 10000
+
+# Joint angle limits (radians)
+angle_limits: [0.0, 6.283185307179586]  # [0, 2π]
+
+# Hyperparameters
+batch_size: 128
+epochs: 20
+learning_rate: 0.001
+hidden_dims: [256, 128, 64] # <-- For ANN
+
+# Solver Settings
+jacobian_max_iter: 100
+jacobian_tolerance: 0.001
+jacobian_step_size: 0.1
+
+sdls_max_iter: 100
+sdls_tolerance: 0.001
+sdls_step_size: 0.1
+
+# Random Seed
+seed: 42
+
+# File Paths
+data_dir: "data"
+models_dir: "models"
+logs_dir: "logs"
+figs_dir: "figs"
