@@ -1,8 +1,3 @@
-"""
-utils.py - Utility functions for NNIK benchmarking pipeline
-Includes forward kinematics, rotation conversions, and I/O helpers
-"""
-
 import numpy as np
 import json
 import yaml
