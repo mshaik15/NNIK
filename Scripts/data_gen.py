@@ -14,13 +14,7 @@ from .utils import (
     set_random_seed
 )
 
-def generate_dataset(
-    n_dof: int,
-    n_samples: int,
-    angle_limits: tuple = (0, 2*np.pi),
-    link_lengths: np.ndarray = None,
-    seed: int = None
-) -> Dict[str, Any]:
+def generate_dataset( n_dof: int, n_samples: int, angle_limits: tuple = (0, 2*np.pi), link_lengths: np.ndarray = None, seed: int = None ) -> Dict[str, Any]:
     """
     Generate IK dataset for a specific DOF configuration
     
