@@ -18,6 +18,15 @@ from .utils import (
 )
 
 def compute_sample_batch(args: Tuple[np.ndarray, np.ndarray, int, int]) -> List[Dict[str, Any]]:
+    """
+    Compute forward kinematics for a batch of samples
+    
+    Args:
+        args: Tuple containing (joint_angles_batch, link_lengths, start_id, batch_size)
+    
+    Returns:
+        List of dictionaries containing sample data
+    """
     joint_angles_batch, link_lengths, start_id, batch_size = args
     
     batch_results = []
@@ -41,14 +50,36 @@ def compute_sample_batch(args: Tuple[np.ndarray, np.ndarray, int, int]) -> List[
     
     return batch_results
 
-def generate_dataset(n_dof: int, n_samples: int, angle_limits: tuple = (0, 2*np.pi), link_lengths: np.ndarray = None, seed: int = None,use_multiprocessing: bool = True, batch_size: int = 100) -> Dict[str, Any]:
+def generate_dataset(
+    n_dof: int, 
+    n_samples: int, 
+    seed: int = None,
+    use_multiprocessing: bool = True,
+    batch_size: int = 100
+) -> Dict[str, Any]:
+    """
+    Generate IK dataset for a specific DOF configuration with SQL-like structure
+    
+    Args:
+        n_dof: Number of degrees of freedom
+        n_samples: Number of samples to generate
+        seed: Random seed for reproducibility
+        use_multiprocessing: Whether to use multiprocessing for FK computation
+        batch_size: Size of batches for multiprocessing
+    
+    Returns:
+        Dictionary containing:
+            - poses: List of pose dictionaries with id and pose
+            - solutions: List of solution dictionaries with id and joint_angles
+            - metadata: Dataset information
+    """
     if seed is not None:
         np.random.seed(seed)
         set_random_seed(seed)
     
-    # Default link lengths
-    if link_lengths is None:
-        link_lengths = np.ones(n_dof)
+    # Hardcoded parameters for IK project
+    link_lengths = np.ones(n_dof)  # All links have length 1.0
+    angle_limits = (0, 2*np.pi)    # Revolute joints: 0 to 2π radians
     
     # Generate random joint configurations
     joint_angles = np.random.uniform(
@@ -248,7 +279,6 @@ def generate_all_datasets(
         train_dataset = generate_dataset(
             n_dof=n_dof,
             n_samples=config['train_samples'],
-            angle_limits=tuple(config['angle_limits']),
             seed=config['seed'] + n_dof,
             use_multiprocessing=use_multiprocessing
         )
@@ -265,7 +295,6 @@ def generate_all_datasets(
         test_dataset = generate_dataset(
             n_dof=n_dof,
             n_samples=config['test_samples'],
-            angle_limits=tuple(config['angle_limits']),
             seed=config['seed'] + n_dof + 1000,
             use_multiprocessing=use_multiprocessing
         )
