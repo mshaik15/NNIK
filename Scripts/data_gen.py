@@ -8,14 +8,26 @@ import multiprocessing as mp
 from functools import partial
 import json
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.append(str(project_root))
 
-from .utils import (
-    forward_kinematics,
-    save_json,
-    load_config,
-    set_random_seed
-)
+# Try relative import first (when used as module), fallback to absolute import
+try:
+    from .utils import (
+        forward_kinematics,
+        save_json,
+        load_config,
+        set_random_seed
+    )
+except ImportError:
+    # Fallback for direct script execution
+    from Scripts.utils import (
+        forward_kinematics,
+        save_json,
+        load_config,
+        set_random_seed
+    )
 
 def compute_sample_batch(args: Tuple[np.ndarray, np.ndarray, int, int]) -> List[Dict[str, Any]]:
     """
