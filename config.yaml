@@ -33,3 +33,11 @@ data_dir: "data"
 models_dir: "models"
 logs_dir: "logs"
 figs_dir: "figs"
+
+# Basic run (uses config.yaml automatically)
+# python Scripts/data_gen.py
+
+# OR specify the config file explicitly
+# python Scripts/data_gen.py --config config.yaml
+
+
