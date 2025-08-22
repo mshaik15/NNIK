@@ -8,15 +8,7 @@ class SVMModel:
     """Support Vector Machine model for inverse kinematics."""
     
     def __init__(self, kernel='rbf', C=1.0, epsilon=0.1, gamma='scale'):
-        """
-        Initialize SVM model.
-        
-        Args:
-            kernel: Kernel type ('linear', 'poly', 'rbf', 'sigmoid')
-            C: Regularization parameter
-            epsilon: Epsilon in epsilon-SVR model
-            gamma: Kernel coefficient
-        """
+        # Initialize SVM model.
         self.kernel = kernel
         self.C = C
         self.epsilon = epsilon
@@ -26,13 +18,7 @@ class SVMModel:
         self.scaler_y = StandardScaler()
         
     def fit(self, X_train, y_train):
-        """
-        Train the SVM model.
-        
-        Args:
-            X_train: Input features (end-effector positions)
-            y_train: Target values (joint angles)
-        """
+        # Train the SVM model.
         # Normalize data
         X_train_scaled = self.scaler_X.fit_transform(X_train)
         y_train_scaled = self.scaler_y.fit_transform(y_train)
@@ -50,15 +36,7 @@ class SVMModel:
         self.model.fit(X_train_scaled, y_train_scaled)
         
     def predict(self, X_test):
-        """
-        Make predictions.
-        
-        Args:
-            X_test: Input features for prediction
-            
-        Returns:
-            Predicted joint angles
-        """
+        # Make predictions.
         if self.model is None:
             raise ValueError("Model must be trained before prediction")
             
