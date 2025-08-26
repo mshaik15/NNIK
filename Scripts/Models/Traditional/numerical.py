@@ -3,7 +3,6 @@ from scipy.optimize import minimize, least_squares
 from typing import List, Dict
 
 def _create_robot_dh(n_dof: int) -> List[Dict[str, float]]:
-    """Create DH parameters for a simple serial robot"""
     dh_params = []
     for i in range(n_dof):
         alpha = 0.0 if i % 2 == 0 else np.pi/2
@@ -13,7 +12,6 @@ def _create_robot_dh(n_dof: int) -> List[Dict[str, float]]:
     return dh_params
 
 def _dh_transform(d: float, a: float, alpha: float, theta: float) -> np.ndarray:
-    """DH transformation matrix"""
     c_theta, s_theta = np.cos(theta), np.sin(theta)
     c_alpha, s_alpha = np.cos(alpha), np.sin(alpha)
     
@@ -57,7 +55,6 @@ def _compute_jacobian(joint_angles: np.ndarray, dh_params: List[Dict[str, float]
     return J
 
 def _pose_to_transform(pose: np.ndarray) -> np.ndarray:
-    """Convert pose to transformation matrix"""
     x, y, z = pose[:3]
     roll, pitch, yaw = pose[3:] if len(pose) >= 6 else [0, 0, 0]
     
@@ -77,7 +74,6 @@ def _pose_to_transform(pose: np.ndarray) -> np.ndarray:
     return T
 
 def _pose_error(T_current: np.ndarray, T_desired: np.ndarray) -> np.ndarray:
-    """Compute pose error"""
     pos_error = T_desired[:3, 3] - T_current[:3, 3]
     
     R_error = T_desired[:3, :3] @ T_current[:3, :3].T
@@ -100,16 +96,6 @@ def _pose_error(T_current: np.ndarray, T_desired: np.ndarray) -> np.ndarray:
     return np.concatenate([pos_error, orient_error])
 
 def jacobian_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float = 1e-3) -> np.ndarray:
-    """
-    Jacobian-based inverse kinematics
-    
-    Args:
-        n_dof: Number of degrees of freedom
-        poses: Target poses - shape (n, 6) or (6,)
-    
-    Returns:
-        Joint angles - shape (n, n_dof) or (n_dof,)
-    """
     poses = np.atleast_2d(poses)
     if poses.shape[1] < 6:
         poses = np.pad(poses, ((0, 0), (0, 6 - poses.shape[1])), 'constant')
@@ -144,16 +130,6 @@ def jacobian_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float =
     return joint_solutions[0] if poses.shape[0] == 1 else joint_solutions
 
 def sdls_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float = 1e-3) -> np.ndarray:
-    """
-    SDLS (Selectively Damped Least Squares) inverse kinematics
-    
-    Args:
-        n_dof: Number of degrees of freedom
-        poses: Target poses - shape (n, 6) or (6,)
-    
-    Returns:
-        Joint angles - shape (n, n_dof) or (n_dof,)
-    """
     poses = np.atleast_2d(poses)
     if poses.shape[1] < 6:
         poses = np.pad(poses, ((0, 0), (0, 6 - poses.shape[1])), 'constant')
