@@ -16,6 +16,7 @@ sys.path.append(str(project_root))
 try:
     from .utils import (
         forward_kinematics,
+        generate_dh_parameters,
         save_json,
         load_config,
         set_random_seed
@@ -24,31 +25,23 @@ except ImportError:
     # Fallback for direct script execution
     from Scripts.utils import (
         forward_kinematics,
+        generate_dh_parameters,
         save_json,
         load_config,
         set_random_seed
     )
 
-def compute_sample_batch(args: Tuple[np.ndarray, np.ndarray, int, int]) -> List[Dict[str, Any]]:
-    """
-    Compute forward kinematics for a batch of samples
-    
-    Args:
-        args: Tuple containing (joint_angles_batch, link_lengths, start_id, batch_size)
-    
-    Returns:
-        List of dictionaries containing sample data
-    """
-    joint_angles_batch, link_lengths, start_id, batch_size = args
+def compute_sample_batch(args: Tuple[np.ndarray, List[Dict[str, float]], int]) -> List[Dict[str, Any]]:
+    joint_angles_batch, dh_params, start_id = args
     
     batch_results = []
     for i, joint_angles in enumerate(joint_angles_batch):
         sample_id = start_id + i
         
-        # Compute forward kinematics
-        fk_result = forward_kinematics(joint_angles, link_lengths)
+        # Compute forward kinematics using DH parameters
+        fk_result = forward_kinematics(joint_angles, dh_params)
         
-        # Create pose vector [x, y, z, alpha, beta, gamma]
+        # Create pose vector [x, y, z, roll, pitch, yaw]
         pose = np.concatenate([
             fk_result['position'],
             fk_result['euler_angles']
@@ -63,77 +56,72 @@ def compute_sample_batch(args: Tuple[np.ndarray, np.ndarray, int, int]) -> List[
     return batch_results
 
 def generate_dataset(
-    n_dof: int, 
-    n_samples: int, 
-    seed: int = None,
-    use_multiprocessing: bool = True,
-    batch_size: int = 100
-) -> Dict[str, Any]:
-    """
-    Generate IK dataset for a specific DOF configuration with SQL-like structure
-    
-    Args:
-        n_dof: Number of degrees of freedom
-        n_samples: Number of samples to generate
-        seed: Random seed for reproducibility
-        use_multiprocessing: Whether to use multiprocessing for FK computation
-        batch_size: Size of batches for multiprocessing
-    
-    Returns:
-        Dictionary containing:
-            - poses: List of pose dictionaries with id and pose
-            - solutions: List of solution dictionaries with id and joint_angles
-            - metadata: Dataset information
-    """
+    dof: int, 
+    samples: int, config: Dict[str, Any], seed: int = None, multiprocessing: bool = True) -> Dict[str, Any]:
     if seed is not None:
         np.random.seed(seed)
         set_random_seed(seed)
     
-    # Hardcoded parameters for IK project
-    link_lengths = np.ones(n_dof)  # All links have length 1.0
-    angle_limits = (0, 2*np.pi)    # Revolute joints: 0 to 2π radians
+    # Generate DH parameters for this DOF configuration
+    dh_params = generate_dh_parameters(dof, config['dh_parameters'])
+    
+    # Get joint angle limits
+    angle_limits = config['angle_limits']
     
     # Generate random joint configurations
     joint_angles = np.random.uniform(
         angle_limits[0],
         angle_limits[1],
-        size=(n_samples, n_dof)
+        size=(samples, dof)
     )
     
-    print(f"Generating {n_samples} samples for DOF={n_dof}...")
+    print(f"Generating {samples} samples for DOF={dof}...")
+    print(f"DH Parameters: {len(dh_params)} joints with link length {config['dh_parameters']['link_length']}")
+    
+    # Get multiprocessing settings
+    mp_config = config.get('multiprocessing', {'enabled': True, 'max': 2, 'batch_size': 50})
+    batch_size = mp_config.get('batch_size', 50)
     
     # Process samples
-    if use_multiprocessing and n_samples > batch_size:
+    if multiprocessing and mp_config.get('enabled', True) and samples > batch_size:
         # Use multiprocessing for larger datasets
         poses_data, solutions_data = _generate_with_multiprocessing(
-            joint_angles, link_lengths, batch_size
+            joint_angles, dh_params, batch_size, mp_config.get('max', 2)
         )
     else:
         # Single-threaded processing
         poses_data, solutions_data = _generate_single_threaded(
-            joint_angles, link_lengths
+            joint_angles, dh_params
         )
     
-    # Create metadata
+    # Create comprehensive metadata
     metadata = {
-        'n_dof': n_dof,
-        'n_samples': n_samples,
-        'link_lengths': link_lengths.tolist(),
-        'angle_limits': list(angle_limits),
+        'dof': dof,
+        'samples': samples,
+        'dh_parameters': dh_params,
+        'joint_angle_limits': list(angle_limits),
+        'link_length': config['dh_parameters']['link_length'],
         'units': {
             'angles': 'radians',
             'position': 'meters',
-            'orientation': 'radians (ZYX Euler)'
+            'orientation': 'radians (XYZ Euler - Roll, Pitch, Yaw)'
         },
-        'description': f'{n_dof}-DOF serial manipulator with unit link lengths',
+        'description': f'{dof}-DOF serial manipulator with unit link lengths and alternating twist angles',
         'data_format': {
-            'pose_structure': '[x, y, z, alpha, beta, gamma]',
-            'joint_angles_structure': f'[theta_1, theta_2, ..., theta_{n_dof}]',
-            'id_mapping': 'Unique ID maps poses to corresponding joint angles'
+            'pose_structure': '[x, y, z, roll, pitch, yaw]',
+            'joint_angles_structure': f'[theta_1, theta_2, ..., theta_{dof}]',
+            'id_mapping': 'Unique ID maps poses to corresponding joint angles',
+            'coordinate_convention': 'XYZ Euler angles (Roll-Pitch-Yaw)'
+        },
+        'kinematics_info': {
+            'dh_convention': 'Standard DH parameters',
+            'transformation_chain': 'DH transforms chained from base to end-effector',
+            'twist_pattern': 'Alternating 0° and 90° link twists for 3D workspace'
         },
         'generation_info': {
             'seed': seed,
-            'multiprocessing_used': use_multiprocessing and n_samples > batch_size
+            'multiprocessing_used': multiprocessing and mp_config.get('enabled', True) and samples > batch_size,
+            'batch_size': batch_size if multiprocessing else samples
         }
     }
     
@@ -143,31 +131,25 @@ def generate_dataset(
         'metadata': metadata
     }
 
-def _generate_with_multiprocessing(
-    joint_angles: np.ndarray, 
-    link_lengths: np.ndarray, 
-    batch_size: int
-) -> Tuple[List[Dict], List[Dict]]:
-    """Generate samples using multiprocessing"""
+def _generate_with_multiprocessing(joint_angles: np.ndarray, dh_params: List[Dict[str, float]], batch_size: int, max: int) -> Tuple[List[Dict], List[Dict]]:
     
-    n_samples = len(joint_angles)
-    n_cores = min(mp.cpu_count(), 4)  # Limit cores for laptop compatibility
+    samples = len(joint_angles)
     
     # Split data into batches
     batches = []
-    for i in range(0, n_samples, batch_size):
-        end_idx = min(i + batch_size, n_samples)
+    for i in range(0, samples, batch_size):
+        end_idx = min(i + batch_size, samples)
         batch_angles = joint_angles[i:end_idx]
-        batches.append((batch_angles, link_lengths, i, len(batch_angles)))
+        batches.append((batch_angles, dh_params, i))
     
-    print(f"Processing {len(batches)} batches using {n_cores} cores...")
+    print(f"Processing {len(batches)} batches using {max} workers...")
     
     # Process batches in parallel
-    with mp.Pool(processes=n_cores) as pool:
+    with mp.Pool(processes=max) as pool:
         batch_results = list(tqdm(
             pool.imap(compute_sample_batch, batches),
             total=len(batches),
-            desc="Computing FK"
+            desc="Computing FK with DH"
         ))
     
     # Flatten results and separate poses from solutions
@@ -187,20 +169,17 @@ def _generate_with_multiprocessing(
     
     return poses_data, solutions_data
 
-def _generate_single_threaded(
-    joint_angles: np.ndarray, 
-    link_lengths: np.ndarray
-) -> Tuple[List[Dict], List[Dict]]:
+def _generate_single_threaded(joint_angles: np.ndarray, dh_params: List[Dict[str, float]]) -> Tuple[List[Dict], List[Dict]]:
     """Generate samples using single-threaded processing"""
     
     poses_data = []
     solutions_data = []
     
-    for i, angles in enumerate(tqdm(joint_angles, desc="Computing FK")):
-        # Compute forward kinematics
-        fk_result = forward_kinematics(angles, link_lengths)
+    for i, angles in enumerate(tqdm(joint_angles, desc="Computing FK with DH")):
+        # Compute forward kinematics using DH parameters
+        fk_result = forward_kinematics(angles, dh_params)
         
-        # Create pose vector [x, y, z, alpha, beta, gamma]
+        # Create pose vector [x, y, z, roll, pitch, yaw]
         pose = np.concatenate([
             fk_result['position'],
             fk_result['euler_angles']
@@ -218,19 +197,8 @@ def _generate_single_threaded(
     
     return poses_data, solutions_data
 
-def save_dataset_files(
-    dataset: Dict[str, Any], 
-    base_filename: str, 
-    output_dir: Path
-):
-    """
-    Save dataset as separate pose and solution JSON files
-    
-    Args:
-        dataset: Dataset dictionary from generate_dataset
-        base_filename: Base filename (e.g., "2_training")
-        output_dir: Output directory path
-    """
+def save_dataset_files(dataset: Dict[str, Any], base_filename: str, output_dir: Path):
+
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save poses file
@@ -251,19 +219,8 @@ def save_dataset_files(
     save_json(solutions_data, solutions_file)
     print(f"✓ Saved solutions to {solutions_file}")
 
-def generate_all_datasets(
-    config: Dict[str, Any], 
-    project_root: Path,
-    use_multiprocessing: bool = True
-):
-    """
-    Generate training and testing datasets for all DOF configurations
-    
-    Args:
-        config: Configuration dictionary
-        project_root: Root directory of the project
-        use_multiprocessing: Whether to use multiprocessing
-    """
+def generate_all_datasets(config: Dict[str, Any], project_root: Path, multiprocessing: bool = True):
+
     # Create data directories
     train_dir = project_root / config['data_dir'] / 'Training'
     test_dir = project_root / config['data_dir'] / 'Testing'
@@ -274,69 +231,65 @@ def generate_all_datasets(
     # Generate datasets for each DOF
     dof_range = range(config['dof_range'][0], config['dof_range'][1] + 1)
     
-    print(f"Dataset Generation Configuration:")
+    print(f"Dataset Generation Configuration (DH Parameters):")
     print(f"  DOF range: {config['dof_range'][0]} to {config['dof_range'][1]}")
-    print(f"  Training samples per DOF: {config['train_samples']}")
+    print(f"  Training samples per DOF: {config['traisamples']}")
     print(f"  Testing samples per DOF: {config['test_samples']}")
-    print(f"  Multiprocessing: {use_multiprocessing}")
+    print(f"  Link length (standardized): {config['dh_parameters']['link_length']}")
+    print(f"  DH config type: {config['dh_parameters']['config_type']}")
+    print(f"  Multiprocessing: {multiprocessing}")
+    print(f"  Max workers: {config.get('multiprocessing', {}).get('max', 2)}")
     print(f"  Random seed: {config['seed']}")
     
-    for n_dof in dof_range:
+    for dof in dof_range:
         print(f"\n{'='*60}")
-        print(f"Generating datasets for DOF={n_dof}")
+        print(f"Generating data for DOF={dof}")
         print('='*60)
         
         # Training dataset
-        print("Generating training dataset...")
+        print("Generating training data")
         train_dataset = generate_dataset(
-            n_dof=n_dof,
-            n_samples=config['train_samples'],
-            seed=config['seed'] + n_dof,
-            use_multiprocessing=use_multiprocessing
+            dof=dof,
+            samples=config['traisamples'],
+            config=config,
+            seed=config['seed'] + dof,
+            multiprocessing=multiprocessing
         )
         
         # Save training dataset
         save_dataset_files(
             train_dataset, 
-            f"{n_dof}_training", 
+            f"{dof}_training", 
             train_dir
         )
         
         # Testing dataset
-        print("\nGenerating testing dataset...")
+        print("\nGenerating testing data")
         test_dataset = generate_dataset(
-            n_dof=n_dof,
-            n_samples=config['test_samples'],
-            seed=config['seed'] + n_dof + 1000,
-            use_multiprocessing=use_multiprocessing
+            dof=dof,
+            samples=config['test_samples'],
+            config=config,
+            seed=config['seed'] + dof + 1000,
+            multiprocessing=multiprocessing
         )
         
         # Save testing dataset
         save_dataset_files(
             test_dataset, 
-            f"{n_dof}_testing", 
+            f"{dof}_testing", 
             test_dir
         )
         
-        print(f"✓ Completed DOF={n_dof} datasets")
+        print(f"✓ Completed DOF={dof} data")
     
     print(f"\n{'='*60}")
-    print("🎉 Dataset generation complete!")
-    print(f"📁 Training files: {train_dir}")
-    print(f"📁 Testing files: {test_dir}")
-    print(f"📊 Total DOFs processed: {len(dof_range)}")
+    print("Dataset generation complete!")
+    print(f"Training files: {train_dir}")
+    print(f"Testing files: {test_dir}")
+    print(f"Total DOFs processed: {len(dof_range)}")
+    print(f"Using DH parameters with standardized link lengths")
 
 def load_dataset(poses_file: Path, solutions_file: Path) -> Dict[str, Any]:
-    """
-    Load a complete dataset from pose and solution files
-    
-    Args:
-        poses_file: Path to poses JSON file
-        solutions_file: Path to solutions JSON file
-    
-    Returns:
-        Dictionary containing combined dataset
-    """
     with open(poses_file, 'r') as f:
         poses_data = json.load(f)
     
@@ -358,7 +311,7 @@ def load_dataset(poses_file: Path, solutions_file: Path) -> Dict[str, Any]:
 
 def main():
     """Main function for standalone execution"""
-    parser = argparse.ArgumentParser(description='Generate IK datasets with SQL-like structure')
+    parser = argparse.ArgumentParser(description='Generate IK datasets using DH parameters')
     parser.add_argument(
         '--config',
         type=str,
@@ -374,7 +327,7 @@ def main():
     parser.add_argument(
         '--no-multiprocessing',
         action='store_true',
-        help='Disable multiprocessing (use single thread)'
+        help='Disable multiprocessing'
     )
     
     args = parser.parse_args()
@@ -385,8 +338,8 @@ def main():
     config = load_config(config_path)
     
     # Generate datasets
-    use_multiprocessing = not args.no_multiprocessing
-    generate_all_datasets(config, project_root, use_multiprocessing)
+    multiprocessing = not args.no_multiprocessing
+    generate_all_datasets(config, project_root, multiprocessing)
 
 if __name__ == '__main__':
     main()

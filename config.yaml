@@ -10,6 +10,24 @@ test_samples: 10000
 # Joint angle limits (radians)
 angle_limits: [0.0, 6.283185307179586]  # [0, 2π]
 
+# DH Parameter Settings
+dh_parameters:
+  # Robot configuration type: 'standard_serial'
+  config_type: 'standard_serial'
+  
+  # All links have standardized length of 1.0 meter
+  link_length: 1.0
+  
+  # DH parameter ranges for joint offsets and twists
+  d_range: [0.0, 0.0]        # No joint offsets (all 0)
+  alpha_range: [0.0, 1.5708] # Link twist range [0, π/2]
+  
+  # Standard serial manipulator configuration
+  # All links have length 1.0, with alternating twist angles for 3D workspace
+  standard_serial:
+    twist_pattern: "alternating"  # alternating 0 and π/2 twists
+    base_offset: 0.0
+
 # Hyperparameters
 batch_size: 128
 epochs: 20
@@ -24,6 +42,16 @@ jacobian_step_size: 0.1
 sdls_max_iter: 100
 sdls_tolerance: 0.001
 sdls_step_size: 0.1
+sdls_damping_factor: 0.01
+
+# Analytical solver settings
+analytical_tolerance: 1e-6
+
+# Performance settings (optimized for i5-6300U)
+multiprocessing:
+  enabled: true
+  max_workers: 2  # Dual core CPU
+  batch_size: 50  # Smaller batches for limited RAM
 
 # Random Seed
 seed: 42
@@ -39,5 +67,3 @@ figs_dir: "figs"
 
 # OR specify the config file explicitly
 # python Scripts/data_gen.py --config config.yaml
-
-
