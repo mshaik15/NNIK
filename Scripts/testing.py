@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import json
 from training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+from Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel
 
 def run_single_test(dof, models, data_path, results_path, sample_limit=None):
     """Run test for single DOF configuration"""
     print(f"Testing DOF={dof}...")
-    
     # Load data
     train_poses = data_path / 'Training' / f'{dof}_training.json'
     train_solutions = data_path / 'Training' / f'{dof}_training_solutions.json'
@@ -214,11 +214,6 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
     RESULTS_PATH = PROJECT_PATH / 'results'
     RESULTS_PATH.mkdir(exist_ok=True)
     
-    # Import models
-    from Models.ann import ANNModel
-    from Models.knn import KNNModel
-    from Models.elm import ELMModel
-    from Models.random_forest import RandomForestModel
     
     # Create models
     models = {}
