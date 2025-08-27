@@ -50,7 +50,7 @@ analytical_tolerance: 1e-6
 # Performance settings (optimized for i5-6300U)
 multiprocessing:
   enabled: true
-  max_workers: 2  # Dual core CPU - FIXED: renamed from max
+  max: 2  # Dual core CPU - FIXED: renamed from max
   batch_size: 50  # Smaller batches for limited RAM
 
 # Random Seed
