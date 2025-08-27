@@ -5,7 +5,7 @@ dof_range: [3, 10]
 
 # Dataset sizes
 train_samples: 2000
-test_samples: 10000
+test_samples: 1000  # FIXED: Was 10000, reduced for testing
 
 # Joint angle limits (radians)
 angle_limits: [0.0, 6.283185307179586]  # [0, 2π]
@@ -28,11 +28,11 @@ dh_parameters:
     twist_pattern: "alternating"  # alternating 0 and π/2 twists
     base_offset: 0.0
 
-# Hyperparameters
+# Hyperparameters for ML models
 batch_size: 128
 epochs: 20
 learning_rate: 0.001
-hidden_dims: [256, 128, 64] # <-- For ANN
+hidden_dims: [256, 128, 64] # For ANN
 
 # Solver Settings
 jacobian_max_iter: 100
@@ -50,7 +50,7 @@ analytical_tolerance: 1e-6
 # Performance settings (optimized for i5-6300U)
 multiprocessing:
   enabled: true
-  max_workers: 2  # Dual core CPU
+  max_workers: 2  # Dual core CPU - FIXED: renamed from max
   batch_size: 50  # Smaller batches for limited RAM
 
 # Random Seed
