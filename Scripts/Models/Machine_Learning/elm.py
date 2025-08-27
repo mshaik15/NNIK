@@ -1,21 +1,10 @@
 import numpy as np
 
-
 class ELMModel:
-    """Extreme Learning Machine model for inverse kinematics."""
-    
+
     def __init__(self, input_dim=2, hidden_dim=100, output_dim=2, 
                  activation='relu', random_state=42):
-        """
-        Initialize ELM model.
-        
-        Args:
-            input_dim: Input dimension
-            hidden_dim: Number of hidden neurons
-            output_dim: Output dimension
-            activation: Activation function ('relu', 'sigmoid', 'tanh')
-            random_state: Random seed for reproducibility
-        """
+
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -47,13 +36,6 @@ class ELMModel:
             raise ValueError(f"Unknown activation: {self.activation}")
             
     def fit(self, X_train, y_train):
-        """
-        Train the ELM model.
-        
-        Args:
-            X_train: Input features (end-effector positions)
-            y_train: Target values (joint angles)
-        """
         X_train = np.array(X_train, dtype=np.float32)
         y_train = np.array(y_train, dtype=np.float32)
         
@@ -72,22 +54,11 @@ class ELMModel:
         
         # Calculate hidden layer output
         H = self._activate(np.dot(X_train_norm, self.W_input) + self.b_hidden)
-        
-        # Calculate output weights using Moore-Penrose pseudoinverse
-        # W_output = pinv(H) * y_train
+
         H_pinv = np.linalg.pinv(H)
         self.W_output = np.dot(H_pinv, y_train_norm)
         
     def predict(self, X_test):
-        """
-        Make predictions.
-        
-        Args:
-            X_test: Input features for prediction
-            
-        Returns:
-            Predicted joint angles
-        """
         if self.W_input is None:
             raise ValueError("Model must be trained before prediction")
             

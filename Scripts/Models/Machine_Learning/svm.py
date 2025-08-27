@@ -50,9 +50,7 @@ class SVMModel:
 if __name__ == "__main__":
     # Example usage with dummy data
     np.random.seed(42)
-    
-    # Generate dummy data (2D end-effector positions -> 2 joint angles)
-    n_samples = 500  # Smaller dataset for SVM (computationally intensive)
+    n_samples = 500
     X_train = np.random.randn(n_samples, 2)  # End-effector positions (x, y)
     y_train = np.random.randn(n_samples, 2)  # Joint angles (theta1, theta2)
     

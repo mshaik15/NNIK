@@ -35,17 +35,14 @@ class MDNNetwork(nn.Module):
         self.fc_sigma = nn.Linear(prev_dim, n_mixtures * output_dim)
         
     def forward(self, x):
-        """Forward pass through the network."""
         h = self.hidden(x)
         
-        # Mixture weights (apply softmax for normalization)
         pi = torch.softmax(self.fc_pi(h), dim=1)
         
         # Means
         mu = self.fc_mu(h)
         mu = mu.view(-1, self.n_mixtures, self.output_dim)
         
-        # Standard deviations (apply exponential to ensure positive)
         sigma = torch.exp(self.fc_sigma(h))
         sigma = sigma.view(-1, self.n_mixtures, self.output_dim)
         
@@ -53,22 +50,8 @@ class MDNNetwork(nn.Module):
 
 
 class MDNModel:
-    """Mixture Density Network model for inverse kinematics."""
-    
     def __init__(self, input_dim=2, output_dim=2, hidden_layers=[128, 64],
                  n_mixtures=5, learning_rate=0.001, epochs=100, batch_size=32):
-        """
-        Initialize MDN model.
-        
-        Args:
-            input_dim: Input dimension (end-effector positions)
-            output_dim: Output dimension (joint angles)
-            hidden_layers: List of hidden layer sizes
-            n_mixtures: Number of Gaussian mixture components
-            learning_rate: Learning rate for optimizer
-            epochs: Number of training epochs
-            batch_size: Batch size for training
-        """
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_layers = hidden_layers
@@ -86,16 +69,6 @@ class MDNModel:
         self.y_std = None
         
     def mdn_loss(self, pi, mu, sigma, y):
-        """
-        Negative log-likelihood loss for MDN.
-        
-        Args:
-            pi: Mixture weights
-            mu: Mixture means
-            sigma: Mixture standard deviations
-            y: Target values
-        """
-        # Expand y to match mixture dimensions
         y = y.unsqueeze(1).expand_as(mu)
         
         # Calculate Gaussian probability for each mixture component
@@ -112,14 +85,6 @@ class MDNModel:
         return -torch.mean(log_sum)
         
     def fit(self, X_train, y_train):
-        """
-        Train the MDN model.
-        
-        Args:
-            X_train: Input features (end-effector positions)
-            y_train: Target values (joint angles)
-        """
-        # Convert to numpy arrays
         X_train = np.array(X_train, dtype=np.float32)
         y_train = np.array(y_train, dtype=np.float32)
         
@@ -175,16 +140,7 @@ class MDNModel:
                 print(f"Epoch [{epoch+1}/{self.epochs}], Loss: {avg_loss:.4f}")
                 
     def predict(self, X_test, mode='mean'):
-        """
-        Make predictions.
-        
-        Args:
-            X_test: Input features for prediction
-            mode: 'mean' for weighted mean, 'sample' for sampling, 'mode' for most likely
-            
-        Returns:
-            Predicted joint angles
-        """
+
         if self.model is None:
             raise ValueError("Model must be trained before prediction")
             
@@ -236,16 +192,7 @@ class MDNModel:
         return torch.stack(samples)
     
     def sample(self, X_test, n_samples=10):
-        """
-        Sample multiple joint angle solutions.
-        
-        Args:
-            X_test: Input features (end-effector positions)
-            n_samples: Number of samples to generate
-            
-        Returns:
-            Array of sampled joint angles
-        """
+
         samples = []
         for _ in range(n_samples):
             sample = self.predict(X_test, mode='sample')

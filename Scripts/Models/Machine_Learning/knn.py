@@ -4,17 +4,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 class KNNModel:
-    """K-Nearest Neighbors model for inverse kinematics."""
-    
     def __init__(self, n_neighbors=5, weights='uniform', metric='euclidean'):
-        """
-        Initialize KNN model.
-        
-        Args:
-            n_neighbors: Number of neighbors to use
-            weights: Weight function ('uniform' or 'distance')
-            metric: Distance metric to use
-        """
         self.n_neighbors = n_neighbors
         self.weights = weights
         self.metric = metric
@@ -23,14 +13,6 @@ class KNNModel:
         self.scaler_y = StandardScaler()
         
     def fit(self, X_train, y_train):
-        """
-        Train the KNN model.
-        
-        Args:
-            X_train: Input features (end-effector positions)
-            y_train: Target values (joint angles)
-        """
-        # Normalize data
         X_train_scaled = self.scaler_X.fit_transform(X_train)
         y_train_scaled = self.scaler_y.fit_transform(y_train)
         
@@ -43,15 +25,6 @@ class KNNModel:
         self.model.fit(X_train_scaled, y_train_scaled)
         
     def predict(self, X_test):
-        """
-        Make predictions.
-        
-        Args:
-            X_test: Input features for prediction
-            
-        Returns:
-            Predicted joint angles
-        """
         if self.model is None:
             raise ValueError("Model must be trained before prediction")
             
@@ -65,8 +38,7 @@ class KNNModel:
 if __name__ == "__main__":
     # Example usage with dummy data
     np.random.seed(42)
-    
-    # Generate dummy data (2D end-effector positions -> 2 joint angles)
+
     n_samples = 1000
     X_train = np.random.randn(n_samples, 2)  # End-effector positions (x, y)
     y_train = np.random.randn(n_samples, 2)  # Joint angles (theta1, theta2)
