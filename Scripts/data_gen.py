@@ -233,7 +233,7 @@ def generate_all_datasets(config: Dict[str, Any], project_root: Path, multiproce
     
     print(f"Dataset Generation Configuration (DH Parameters):")
     print(f"  DOF range: {config['dof_range'][0]} to {config['dof_range'][1]}")
-    print(f"  Training samples per DOF: {config['traisamples']}")
+    print(f"  Training samples per DOF: {config['train_samples']}")
     print(f"  Testing samples per DOF: {config['test_samples']}")
     print(f"  Link length (standardized): {config['dh_parameters']['link_length']}")
     print(f"  DH config type: {config['dh_parameters']['config_type']}")
@@ -250,7 +250,7 @@ def generate_all_datasets(config: Dict[str, Any], project_root: Path, multiproce
         print("Generating training data")
         train_dataset = generate_dataset(
             dof=dof,
-            samples=config['traisamples'],
+            samples=config['train_samples'],
             config=config,
             seed=config['seed'] + dof,
             multiprocessing=multiprocessing
