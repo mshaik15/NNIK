@@ -7,8 +7,7 @@ from typing import Dict, Any, Optional, Tuple
 import time
 
 class BaseModel(ABC):
-    """Base class for all IK models to ensure consistent interface"""
-    
+
     def __init__(self, name: str):
         self.name = name
         self.is_trained = False
@@ -75,7 +74,6 @@ class BaseModel(ABC):
         pass
     
     def get_info(self) -> Dict[str, Any]:
-        """Get model information"""
         return {
             'name': self.name,
             'is_trained': self.is_trained,

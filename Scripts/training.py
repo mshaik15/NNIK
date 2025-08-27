@@ -45,10 +45,6 @@ def train_all_models(models: Dict, X_train: np.ndarray, y_train: np.ndarray) -> 
     return results
 
 def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.ndarray) -> Dict:
-    """
-    Evaluate all trained models - NO FORWARD KINEMATICS
-    Since we generated perfect data, we only need joint-space metrics
-    """
     results = {}
     
     for name, model_data in trained_models.items():

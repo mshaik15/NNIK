@@ -193,8 +193,8 @@ def print_summary_report(df):
         return
     
     print("\n" + "="*60)
-    print("📊 BENCHMARKING SUMMARY REPORT")
-    print("="*60)
+    print("REPORT")
+    print("-"*60)
     
     # Overall statistics
     print(f"DOF Range Tested: {df['dof'].min()} to {df['dof'].max()}")
@@ -212,7 +212,7 @@ def print_summary_report(df):
     print(f"  Fastest Training: {fastest['model']} (DOF={fastest['dof']}, Time={fastest['training_time']:.2f}s)")
     
     # Average performance across all DOFs
-    print(f"\n📈 AVERAGE PERFORMANCE (across all DOFs):")
+    print(f"\nAVERAGE PERFORMANCE (across all DOFs):")
     avg_perf = df.groupby('model')[['position_rmse', 'joint_rmse', 'training_time']].mean().round(4)
     print(avg_perf)
     
@@ -231,11 +231,9 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
     
     # Verify data exists
     if not DATA_PATH.exists():
-        print(f"❌ Data directory not found: {DATA_PATH}")
-        print("   Run 'python Scripts/data_gen.py' to generate data first")
+        print(f"data directory not found: {DATA_PATH}") #python Scripts/data_gen.py
         return None, None
-    
-    # Create models with appropriate dimensions (will be updated per DOF)
+
     models = {}
     if 'ANN' in model_list:
         models['ANN'] = ANNModel(
@@ -251,9 +249,9 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
     if 'Random_Forest' in model_list:
         models['Random_Forest'] = RandomForestModel(n_estimators=25)
     
-    print(f"🚀 Updated quick test: DOFs={dof_list}, Models={list(models.keys())}")
-    print(f"📁 Data path: {DATA_PATH}")
-    print(f"📊 Results path: {RESULTS_PATH}")
+    print(f"Quick test: DOFs={dof_list}, Models={list(models.keys())}")
+    print(f"Data path: {DATA_PATH}")
+    print(f"Results path: {RESULTS_PATH}")
 
     results_df = multiple_test(dof_list, models, DATA_PATH, RESULTS_PATH, sample_limit)
     
