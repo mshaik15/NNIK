@@ -87,32 +87,3 @@ class GPRModel:
         return np.array(samples)
 
 
-if __name__ == "__main__":
-    np.random.seed(42)
-    n_samples = 200 
-    X_train = np.random.randn(n_samples, 2)
-    y_train = np.random.randn(n_samples, 2)
-    
-    # Create and train model
-    model = GPRModel(kernel_type='rbf', length_scale=1.0, alpha=1e-5)
-    model.fit(X_train, y_train)
-    
-    # Test prediction with uncertainty
-    X_test = np.random.randn(10, 2)
-    predictions, uncertainties = model.predict(X_test, return_std=True)
-    
-    print("GPR Model Test")
-    print("-" * 40)
-    print(f"Training samples: {X_train.shape}")
-    print(f"Test samples: {X_test.shape}")
-    print(f"Predictions shape: {predictions.shape}")
-    print(f"\nSample predictions with uncertainty (first 3):")
-    for i in range(3):
-        print(f"  Input: {X_test[i]}")
-        print(f"  Output: {predictions[i]} ± {uncertainties[i]}")
-    
-    # Test sampling
-    samples = model.sample(X_test[:1], n_samples=5)
-    print(f"\n5 samples for first test input:")
-    for i, sample in enumerate(samples):
-        print(f"  Sample {i+1}: {sample[0]}")

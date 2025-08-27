@@ -77,35 +77,3 @@ class ELMModel:
         return y_pred
 
 
-if __name__ == "__main__":
-    # Example usage with dummy data
-    np.random.seed(42)
-    
-    # Generate dummy data (2D end-effector positions -> 2 joint angles)
-    n_samples = 1000
-    X_train = np.random.randn(n_samples, 2)  # End-effector positions (x, y)
-    y_train = np.random.randn(n_samples, 2)  # Joint angles (theta1, theta2)
-    
-    # Create and train model
-    model = ELMModel(
-        input_dim=2,
-        hidden_dim=200,
-        output_dim=2,
-        activation='relu',
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-    
-    # Test prediction
-    X_test = np.random.randn(10, 2)
-    predictions = model.predict(X_test)
-    
-    print("ELM Model Test")
-    print("-" * 40)
-    print(f"Training samples: {X_train.shape}")
-    print(f"Hidden neurons: {model.hidden_dim}")
-    print(f"Test samples: {X_test.shape}")
-    print(f"Predictions shape: {predictions.shape}")
-    print(f"\nSample predictions (first 3):")
-    for i in range(3):
-        print(f"  Input: {X_test[i]}, Output: {predictions[i]}")
