@@ -3,8 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
-from training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
-from Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel
+from .training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+from .Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel
 
 def run_single_test(dof, models, data_path, results_path, sample_limit=None):
     """Run test for single DOF configuration"""
