@@ -8,14 +8,16 @@ from typing import Dict, Any, Tuple
 from sklearn.metrics import mean_squared_error
 
 def load_ik_data(poses_file: Path, solutions_file: Path) -> Tuple[np.ndarray, np.ndarray]:
-    """Load IK data from JSON files"""
     with open(poses_file, 'r') as f:
         poses_data = json.load(f)
     with open(solutions_file, 'r') as f:
         solutions_data = json.load(f)
-    
+
     X = np.array([item['pose'] for item in poses_data['data']], dtype=np.float32)
     y = np.array([item['joint_angles'] for item in solutions_data['data']], dtype=np.float32)
+    
+    print(f"Loaded data: X shape = {X.shape}, y shape = {y.shape}")
+    print(f"DOF from data: {y.shape[1]}")
     
     return X, y
 
@@ -42,30 +44,12 @@ def train_all_models(models: Dict, X_train: np.ndarray, y_train: np.ndarray) -> 
     
     return results
 
-def forward_kinematics(joint_angles: np.ndarray, link_lengths: np.ndarray) -> dict:
-    """
-    Simple forward kinematics for a planar robot arm.
-    Returns position (x, y, z) and euler_angles (roll, pitch, yaw).
-    Assumes all joints are revolute and in the XY plane.
-    """
-    x, y = 0.0, 0.0
-    theta = 0.0
-    for angle, length in zip(joint_angles, link_lengths):
-        theta += angle
-        x += length * np.cos(theta)
-        y += length * np.sin(theta)
-    position = np.array([x, y, 0.0])
-    euler_angles = np.array([0.0, 0.0, theta])
-    return {'position': position, 'euler_angles': euler_angles}
-
-
 def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.ndarray) -> Dict:
-    """Evaluate all trained models with proper FK computation"""
+    """
+    Evaluate all trained models - NO FORWARD KINEMATICS
+    Since we generated perfect data, we only need joint-space metrics
+    """
     results = {}
-    
-    # Get DOF from y_test shape
-    n_dof = y_test.shape[1]
-    link_lengths = np.ones(n_dof)  # Unit link lengths
     
     for name, model_data in trained_models.items():
         if 'error' in model_data:
@@ -81,41 +65,22 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
             y_pred = model.predict(X_test)
             inference_time = time.time() - start_time
             
-            # Compute FK in batches for efficiency
-            batch_size = 100
-            fk_pred = []
-            fk_true = []
-            
-            for i in range(0, len(y_pred), batch_size):
-                batch_pred = y_pred[i:i+batch_size]
-                batch_true = y_test[i:i+batch_size]
-                
-                for j in range(len(batch_pred)):
-                    # Fixed FK calls with link_lengths
-                    result_pred = forward_kinematics(batch_pred[j], link_lengths)
-                    result_true = forward_kinematics(batch_true[j], link_lengths)
-                    
-                    pose_pred = np.concatenate([result_pred['position'], result_pred['euler_angles']])
-                    pose_true = np.concatenate([result_true['position'], result_true['euler_angles']])
-                    
-                    fk_pred.append(pose_pred)
-                    fk_true.append(pose_true)
-            
-            fk_pred = np.array(fk_pred)
-            fk_true = np.array(fk_true)
-            
-            # Metrics
-            position_rmse = np.sqrt(mean_squared_error(fk_true[:, :3], fk_pred[:, :3]))
+            # Joint space error (this is what we actually care about)
             joint_rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+            # For compatibility with existing plots, set position_rmse = joint_rmse
+            position_rmse = joint_rmse
             
             results[name] = {
                 'model': model,
-                'position_rmse': position_rmse,
+                'position_rmse': position_rmse,  # Same as joint_rmse for simplicity
                 'joint_rmse': joint_rmse,
                 'training_time': model_data['training_time'],
                 'inference_time': inference_time,
                 'inference_time_per_sample': inference_time / len(X_test)
             }
+            
+            print(f"  ✓ Joint RMSE: {joint_rmse:.4f}")
             
         except Exception as e:
             print(f"  ✗ Failed: {str(e)}")

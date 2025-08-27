@@ -6,14 +6,20 @@ import json
 from .training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
 from .Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel
 
-def run_single_test(dof, models, data_path, results_path, sample_limit=None):
-    """Run test for single DOF configuration"""
+def single_test(dof, models, data_path, results_path, sample_limit=None):
+
     print(f"Testing DOF={dof}...")
-    # Load data
+    
+    # Load data using updated format
     train_poses = data_path / 'Training' / f'{dof}_training.json'
     train_solutions = data_path / 'Training' / f'{dof}_training_solutions.json'
-    test_poses = data_path / 'Testing' / f'{dof}_testing.json'
+    test_poses = data_path / 'Testing' / f'{dof}_testing.json' 
     test_solutions = data_path / 'Testing' / f'{dof}_testing_solutions.json'
+    
+    # Check if files exist
+    for file_path in [train_poses, train_solutions, test_poses, test_solutions]:
+        if not file_path.exists():
+            raise FileNotFoundError(f"Required data file not found: {file_path}")
     
     X_train, y_train = load_ik_data(train_poses, train_solutions)
     X_test, y_test = load_ik_data(test_poses, test_solutions)
@@ -28,14 +34,21 @@ def run_single_test(dof, models, data_path, results_path, sample_limit=None):
             X_test, y_test = X_test[idx], y_test[idx]
     
     print(f"  Data: Train={X_train.shape[0]}, Test={X_test.shape[0]}")
+    print(f"  Input dims: {X_train.shape[1]} (pose), Output dims: {y_train.shape[1]} (joints)")
     
-    # Update model dimensions
+    # Update model dimensions based on actual data
     for model in models.values():
         if hasattr(model, 'model_params'):
-            model.model_params['input_dim'] = X_train.shape[1]
-            model.model_params['output_dim'] = y_train.shape[1]
+            model.model_params['input_dim'] = X_train.shape[1]  # Should be 6 for [x,y,z,roll,pitch,yaw]
+            model.model_params['output_dim'] = y_train.shape[1]  # Should be dof
+        
+        # Update other models that don't use model_params
+        if hasattr(model, 'input_dim'):
+            model.input_dim = X_train.shape[1]
+        if hasattr(model, 'output_dim'):
+            model.output_dim = y_train.shape[1]
     
-    # Train and evaluate
+    # Train and evaluate using existing functions (they're now updated)
     training_results = train_all_models(models, X_train, y_train)
     evaluation_results = evaluate_all_models(training_results, X_test, y_test)
     df = create_results_dataframe(evaluation_results)
@@ -43,18 +56,19 @@ def run_single_test(dof, models, data_path, results_path, sample_limit=None):
     if not df.empty:
         df['dof'] = dof
         # Save individual results
+        results_path.mkdir(parents=True, exist_ok=True)
         df.to_csv(results_path / f'dof_{dof}_results.csv', index=False)
         print(f"  ✓ Results saved for DOF={dof}")
     
     return df
 
-def run_multi_dof_test(dof_range, models, data_path, results_path, sample_limit=None):
+def multiple_test(dof_range, models, data_path, results_path, sample_limit=None):
     """Run tests across multiple DOF configurations"""
     all_results = []
     
     for dof in dof_range:
         try:
-            df = run_single_test(dof, models, data_path, results_path, sample_limit)
+            df = single_test(dof, models, data_path, results_path, sample_limit)
             if not df.empty:
                 all_results.append(df)
         except Exception as e:
@@ -205,34 +219,46 @@ def print_summary_report(df):
     print("="*60)
 
 def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limit=500):
-    """Quick test function for development"""
+    """Quick test function - UPDATED for new data format"""
     from pathlib import Path
     
-    # Paths (adjust these)
-    PROJECT_PATH = Path('.')  # Adjust to your project path
+    # Paths
+    PROJECT_PATH = Path('.')
     DATA_PATH = PROJECT_PATH / 'data'
     RESULTS_PATH = PROJECT_PATH / 'results'
+    
     RESULTS_PATH.mkdir(exist_ok=True)
     
+    # Verify data exists
+    if not DATA_PATH.exists():
+        print(f"❌ Data directory not found: {DATA_PATH}")
+        print("   Run 'python Scripts/data_gen.py' to generate data first")
+        return None, None
     
-    # Create models
+    # Create models with appropriate dimensions (will be updated per DOF)
     models = {}
     if 'ANN' in model_list:
-        models['ANN'] = ANNModel(hidden_layers=[64, 32], epochs=20)
+        models['ANN'] = ANNModel(
+            input_dim=6,  # [x,y,z,roll,pitch,yaw]
+            output_dim=3,  # Will be updated per DOF
+            hidden_layers=[64, 32], 
+            epochs=20
+        )
     if 'KNN' in model_list:
         models['KNN'] = KNNModel(n_neighbors=5)
     if 'ELM' in model_list:
-        models['ELM'] = ELMModel(hidden_dim=50)
+        models['ELM'] = ELMModel(input_dim=6, output_dim=3, hidden_dim=50)
     if 'Random_Forest' in model_list:
         models['Random_Forest'] = RandomForestModel(n_estimators=25)
     
-    print(f"🚀 Quick test: DOFs={dof_list}, Models={list(models.keys())}")
-    
-    # Run tests
-    results_df = run_multi_dof_test(dof_list, models, DATA_PATH, RESULTS_PATH, sample_limit)
+    print(f"🚀 Updated quick test: DOFs={dof_list}, Models={list(models.keys())}")
+    print(f"📁 Data path: {DATA_PATH}")
+    print(f"📊 Results path: {RESULTS_PATH}")
+
+    results_df = multiple_test(dof_list, models, DATA_PATH, RESULTS_PATH, sample_limit)
     
     if results_df is not None:
-        # Generate plots and summary
+
         plot_scalability_analysis(results_df, RESULTS_PATH / 'scalability.png')
         avg_metrics = plot_model_ranking(results_df, RESULTS_PATH / 'ranking.png')
         print_summary_report(results_df)

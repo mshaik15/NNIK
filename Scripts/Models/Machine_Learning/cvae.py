@@ -5,10 +5,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
 
-
 class CVAENetwork(nn.Module):
-    """Conditional VAE network architecture."""
-    
+
     def __init__(self, input_dim, condition_dim, latent_dim, hidden_dim=128):
         super(CVAENetwork, self).__init__()
         
@@ -64,23 +62,9 @@ class CVAENetwork(nn.Module):
 
 
 class CVAEModel:
-    """Conditional Variational Autoencoder model for inverse kinematics."""
     
     def __init__(self, input_dim=2, output_dim=2, latent_dim=10, hidden_dim=128,
                  learning_rate=0.001, epochs=100, batch_size=32, beta=1.0):
-        """
-        Initialize CVAE model.
-        
-        Args:
-            input_dim: Input dimension (end-effector position)
-            output_dim: Output dimension (joint angles)
-            latent_dim: Latent space dimension
-            hidden_dim: Hidden layer size
-            learning_rate: Learning rate for optimizer
-            epochs: Number of training epochs
-            batch_size: Batch size for training
-            beta: Weight for KL divergence term
-        """
         self.input_dim = output_dim  # Joint angles are input to VAE
         self.condition_dim = input_dim  # End-effector positions are conditions
         self.latent_dim = latent_dim
@@ -99,8 +83,6 @@ class CVAEModel:
         self.y_std = None
         
     def loss_function(self, x_recon, x, mu, logvar):
-        """VAE loss function with reconstruction and KL divergence."""
-        # Reconstruction loss
         recon_loss = nn.functional.mse_loss(x_recon, x, reduction='sum')
         
         # KL divergence
@@ -109,14 +91,6 @@ class CVAEModel:
         return recon_loss + self.beta * kl_loss
         
     def fit(self, X_train, y_train):
-        """
-        Train the CVAE model.
-        
-        Args:
-            X_train: Input features (end-effector positions) - used as conditions
-            y_train: Target values (joint angles) - reconstructed by VAE
-        """
-        # Convert to numpy arrays
         X_train = np.array(X_train, dtype=np.float32)
         y_train = np.array(y_train, dtype=np.float32)
         
@@ -172,16 +146,6 @@ class CVAEModel:
                 print(f"Epoch [{epoch+1}/{self.epochs}], Loss: {avg_loss:.4f}")
                 
     def predict(self, X_test, n_samples=1):
-        """
-        Make predictions by sampling from the posterior.
-        
-        Args:
-            X_test: Input features (end-effector positions)
-            n_samples: Number of samples to generate per input
-            
-        Returns:
-            Mean of predicted joint angles (or all samples if n_samples > 1)
-        """
         if self.model is None:
             raise ValueError("Model must be trained before prediction")
             
@@ -213,16 +177,6 @@ class CVAEModel:
             return predictions.mean(axis=0), predictions
     
     def sample(self, X_test, n_samples=10):
-        """
-        Sample multiple joint angle solutions for given end-effector positions.
-        
-        Args:
-            X_test: Input features (end-effector positions)
-            n_samples: Number of samples to generate
-            
-        Returns:
-            Array of sampled joint angles
-        """
         _, samples = self.predict(X_test, n_samples=n_samples)
         return samples.transpose(1, 0, 2)  # Shape: (n_test, n_samples, output_dim)
 
@@ -231,11 +185,10 @@ if __name__ == "__main__":
     # Example usage with dummy data
     np.random.seed(42)
     torch.manual_seed(42)
-    
-    # Generate dummy data (2D end-effector positions -> 2 joint angles)
+
     n_samples = 1000
-    X_train = np.random.randn(n_samples, 2)  # End-effector positions (x, y)
-    y_train = np.random.randn(n_samples, 2)  # Joint angles (theta1, theta2)
+    X_train = np.random.randn(n_samples, 2)
+    y_train = np.random.randn(n_samples, 2)
     
     # Create and train model
     model = CVAEModel(
