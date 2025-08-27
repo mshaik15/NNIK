@@ -45,28 +45,3 @@ class SVMModel:
         y_pred = self.scaler_y.inverse_transform(y_pred_scaled)
         
         return y_pred
-
-
-if __name__ == "__main__":
-    # Example usage with dummy data
-    np.random.seed(42)
-    n_samples = 500
-    X_train = np.random.randn(n_samples, 2)  # End-effector positions (x, y)
-    y_train = np.random.randn(n_samples, 2)  # Joint angles (theta1, theta2)
-    
-    # Create and train model
-    model = SVMModel(kernel='rbf', C=10.0, epsilon=0.01)
-    model.fit(X_train, y_train)
-    
-    # Test prediction
-    X_test = np.random.randn(10, 2)
-    predictions = model.predict(X_test)
-    
-    print("SVM Model Test")
-    print("-" * 40)
-    print(f"Training samples: {X_train.shape}")
-    print(f"Test samples: {X_test.shape}")
-    print(f"Predictions shape: {predictions.shape}")
-    print(f"\nSample predictions (first 3):")
-    for i in range(3):
-        print(f"  Input: {X_test[i]}, Output: {predictions[i]}")
