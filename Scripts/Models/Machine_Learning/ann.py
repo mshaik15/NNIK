@@ -3,8 +3,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from base_model import BaseModel
 from typing import Dict, Any
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+current_file = Path(__file__).resolve()
+project_root = current_file.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from Scripts.base_model import BaseModel
 
 class ANNNetwork(nn.Module):
     """PyTorch neural network architecture."""
@@ -45,9 +53,9 @@ class ANNNetwork(nn.Module):
 class ANNModel(BaseModel):
     """Improved ANN model with better training and validation"""
     
-    def __init__(self, input_dim=6, output_dim=2, hidden_layers=[128, 64], 
-                 activation='relu', learning_rate=0.001, epochs=100, 
-                 batch_size=32, dropout_rate=0.1, early_stopping_patience=10):
+    def __init__(self, input_dim=6, output_dim=2, hidden_layers=[256, 128, 64], 
+                 activation='relu', learning_rate=0.001, epochs=20, 
+                 batch_size=128, dropout_rate=0.1, early_stopping_patience=10):
         super().__init__("ANN")
         
         # Store parameters
