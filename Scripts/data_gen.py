@@ -5,7 +5,6 @@ from tqdm import tqdm
 from typing import Dict, Any, List, Tuple
 import sys
 import multiprocessing as mp
-from functools import partial
 import json
 
 # Add project root to path for imports

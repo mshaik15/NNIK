@@ -1,6 +1,5 @@
 import numpy as np
 import time
-from typing import Optional
 
 def analytical_ik(n_dof: int, poses: np.ndarray, timeout: float = 5.0) -> np.ndarray:
     if not (2 <= n_dof <= 10):

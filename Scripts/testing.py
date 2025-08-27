@@ -2,12 +2,25 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-import json
-from .training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
-from .Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel
+import sys
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parent.parent
+sys.path.insert(0, str(project_root))
+
+try:
+    from Scripts.training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+    from Scripts.Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
+except ImportError:
+    try:
+        from training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+        from Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("Make sure you're running from the project root directory")
 
 def single_test(dof, models, data_path, results_path, sample_limit=None):
-
+    """Test all models on a single DOF configuration"""
     print(f"Testing DOF={dof}...")
     
     # Load data using updated format
@@ -193,7 +206,7 @@ def print_summary_report(df):
         return
     
     print("\n" + "="*60)
-    print("REPORT")
+    print("BENCHMARK REPORT")
     print("-"*60)
     
     # Overall statistics
@@ -218,7 +231,54 @@ def print_summary_report(df):
     
     print("="*60)
 
-def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limit=500):
+def create_models(input_dim=6, output_dim=3):
+    """Create model instances with proper dimensions"""
+    models = {}
+    
+    # Always available models
+    models['ANN'] = ANNModel(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_layers=[64, 32], 
+        epochs=20
+    )
+    models['KNN'] = KNNModel(n_neighbors=5)
+    models['ELM'] = ELMModel(input_dim=input_dim, output_dim=output_dim, hidden_dim=50)
+    models['RandomForest'] = RandomForestModel(n_estimators=25)
+    try:
+        models['SVM'] = SVMModel(kernel='rbf', C=1.0, epsilon=0.1)
+    except Exception as e:
+        print(f"SVM model not available: {e}")
+    
+    try:
+        models['GPR'] = GPRModel(kernel_type='rbf')
+    except Exception as e:
+        print(f"GPR model not available: {e}")
+    
+    try:
+        models['MDN'] = MDNModel(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_layers=[64, 32],
+            n_mixtures=3,
+            epochs=50
+        )
+    except Exception as e:
+        print(f"MDN model not available: {e}")
+    
+    try:
+        models['CVAE'] = CVAEModel(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            latent_dim=8,
+            epochs=50
+        )
+    except Exception as e:
+        print(f"CVAE model not available: {e}")
+    
+    return models
+
+def quick_test(dof_list=[3, 4, 5], model_list=None, sample_limit=500):
     """Quick test function - UPDATED for new data format"""
     from pathlib import Path
     
@@ -231,23 +291,22 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
     
     # Verify data exists
     if not DATA_PATH.exists():
-        print(f"data directory not found: {DATA_PATH}") #python Scripts/data_gen.py
+        print(f"Data directory not found: {DATA_PATH}")
+        print("Run: python Scripts/data_gen.py")
         return None, None
 
+    # Create models
+    if model_list is None:
+        model_list = ['ANN', 'KNN', 'ELM', 'RandomForest']
+    
+    # Create model instances
     models = {}
-    if 'ANN' in model_list:
-        models['ANN'] = ANNModel(
-            input_dim=6,  # [x,y,z,roll,pitch,yaw]
-            output_dim=3,  # Will be updated per DOF
-            hidden_layers=[64, 32], 
-            epochs=20
-        )
-    if 'KNN' in model_list:
-        models['KNN'] = KNNModel(n_neighbors=5)
-    if 'ELM' in model_list:
-        models['ELM'] = ELMModel(input_dim=6, output_dim=3, hidden_dim=50)
-    if 'Random_Forest' in model_list:
-        models['Random_Forest'] = RandomForestModel(n_estimators=25)
+    all_models = create_models()
+    for model_name in model_list:
+        if model_name in all_models:
+            models[model_name] = all_models[model_name]
+        else:
+            print(f"Warning: Model {model_name} not available")
     
     print(f"Quick test: DOFs={dof_list}, Models={list(models.keys())}")
     print(f"Data path: {DATA_PATH}")
@@ -256,7 +315,6 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
     results_df = multiple_test(dof_list, models, DATA_PATH, RESULTS_PATH, sample_limit)
     
     if results_df is not None:
-
         plot_scalability_analysis(results_df, RESULTS_PATH / 'scalability.png')
         avg_metrics = plot_model_ranking(results_df, RESULTS_PATH / 'ranking.png')
         print_summary_report(results_df)
@@ -264,7 +322,3 @@ def quick_test(dof_list=[3, 4, 5], model_list=['ANN', 'KNN', 'ELM'], sample_limi
         return results_df, avg_metrics
     
     return None, None
-
-if __name__ == "__main__":
-    # Run quick test
-    results, metrics = quick_test()

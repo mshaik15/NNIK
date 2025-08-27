@@ -1,4 +1,3 @@
-import numpy as np
 from sklearn.svm import SVR
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.preprocessing import StandardScaler

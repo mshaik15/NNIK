@@ -1,6 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize, least_squares
-from typing import List, Dict
+from scipy.optimize import minimize
 import sys
 from pathlib import Path
 

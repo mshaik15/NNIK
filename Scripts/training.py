@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Tuple
 from sklearn.metrics import mean_squared_error
 
 def load_ik_data(poses_file: Path, solutions_file: Path) -> Tuple[np.ndarray, np.ndarray]:
