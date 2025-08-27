@@ -1,60 +1,29 @@
 import numpy as np
 from scipy.optimize import minimize, least_squares
 from typing import List, Dict
+import sys
+from pathlib import Path
 
-def _create_robot_dh(n_dof: int) -> List[Dict[str, float]]:
-    dh_params = []
-    for i in range(n_dof):
-        alpha = 0.0 if i % 2 == 0 else np.pi/2
-        dh_params.append({
-            'd': 0.0, 'a': 1.0, 'alpha': alpha
-        })
-    return dh_params
-
-def _dh_transform(d: float, a: float, alpha: float, theta: float) -> np.ndarray:
-    c_theta, s_theta = np.cos(theta), np.sin(theta)
-    c_alpha, s_alpha = np.cos(alpha), np.sin(alpha)
+# Import existing utilities instead of duplicating code
+try:
+    # Try relative import first
+    from ...utils import (
+        generate_dh_parameters, forward_kinematics, compute_jacobian,
+        compute_jacobian_pseudoinverse, dh_transform_matrix
+    )
+except ImportError:
+    # Fallback for direct execution - add parent directories to path
+    current_file = Path(__file__).resolve()
+    project_root = current_file.parent.parent.parent
+    sys.path.insert(0, str(project_root))
     
-    return np.array([
-        [c_theta, -s_theta * c_alpha,  s_theta * s_alpha, a * c_theta],
-        [s_theta,  c_theta * c_alpha, -c_theta * s_alpha, a * s_theta],
-        [0,        s_alpha,            c_alpha,           d],
-        [0,        0,                  0,                 1]
-    ])
-
-def _forward_kinematics(joint_angles: np.ndarray, dh_params: List[Dict[str, float]]) -> np.ndarray:
-    """Forward kinematics"""
-    T = np.eye(4)
-    for i, angle in enumerate(joint_angles):
-        if i < len(dh_params):
-            dh = dh_params[i]
-            T = T @ _dh_transform(dh['d'], dh['a'], dh['alpha'], angle)
-    return T
-
-def _compute_jacobian(joint_angles: np.ndarray, dh_params: List[Dict[str, float]]) -> np.ndarray:
-    """Compute Jacobian matrix"""
-    n_dof = len(joint_angles)
-    J = np.zeros((6, n_dof))
-    
-    transforms = [np.eye(4)]
-    T = np.eye(4)
-    
-    for i in range(n_dof):
-        dh = dh_params[i]
-        T = T @ _dh_transform(dh['d'], dh['a'], dh['alpha'], joint_angles[i])
-        transforms.append(T.copy())
-    
-    p_end = transforms[-1][:3, 3]
-    
-    for i in range(n_dof):
-        z_i = transforms[i][:3, 2]
-        p_i = transforms[i][:3, 3]
-        J[:3, i] = np.cross(z_i, p_end - p_i)
-        J[3:, i] = z_i
-    
-    return J
+    from Scripts.utils import (
+        generate_dh_parameters, forward_kinematics, compute_jacobian,
+        compute_jacobian_pseudoinverse, dh_transform_matrix
+    )
 
 def _pose_to_transform(pose: np.ndarray) -> np.ndarray:
+    """Convert pose [x, y, z, roll, pitch, yaw] to 4x4 transformation matrix"""
     x, y, z = pose[:3]
     roll, pitch, yaw = pose[3:] if len(pose) >= 6 else [0, 0, 0]
     
@@ -74,6 +43,7 @@ def _pose_to_transform(pose: np.ndarray) -> np.ndarray:
     return T
 
 def _pose_error(T_current: np.ndarray, T_desired: np.ndarray) -> np.ndarray:
+    """Compute pose error vector"""
     pos_error = T_desired[:3, 3] - T_current[:3, 3]
     
     R_error = T_desired[:3, :3] @ T_current[:3, :3].T
@@ -96,11 +66,24 @@ def _pose_error(T_current: np.ndarray, T_desired: np.ndarray) -> np.ndarray:
     return np.concatenate([pos_error, orient_error])
 
 def jacobian_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float = 1e-3) -> np.ndarray:
+    """
+    Jacobian-based inverse kinematics using existing utilities
+    
+    Args:
+        n_dof: Number of degrees of freedom
+        poses: Target poses - shape (n, 6) or (6,)
+    
+    Returns:
+        Joint angles - shape (n, n_dof) or (n_dof,)
+    """
     poses = np.atleast_2d(poses)
     if poses.shape[1] < 6:
         poses = np.pad(poses, ((0, 0), (0, 6 - poses.shape[1])), 'constant')
     
-    dh_params = _create_robot_dh(n_dof)
+    # Use existing DH parameter generation
+    dh_config = {'config_type': 'standard_serial', 'link_length': 1.0}
+    dh_params = generate_dh_parameters(n_dof, dh_config)
+    
     joint_solutions = np.zeros((poses.shape[0], n_dof))
     
     for i, pose in enumerate(poses):
@@ -108,19 +91,20 @@ def jacobian_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float =
         q = np.random.uniform(0, 2*np.pi, n_dof)
         
         for _ in range(max_iter):
-            T_current = _forward_kinematics(q, dh_params)
+            # Use existing forward kinematics
+            fk_result = forward_kinematics(q, dh_params)
+            T_current = fk_result['transformation_matrix']
+            
             error = _pose_error(T_current, T_desired)
             
             if np.linalg.norm(error) < tol:
                 break
             
-            J = _compute_jacobian(q, dh_params)
-            damping = 1e-4
+            # Use existing Jacobian computation
+            J = compute_jacobian(q, dh_params)
             
-            if n_dof >= 6:
-                J_pinv = np.linalg.solve(J.T @ J + damping * np.eye(n_dof), J.T)
-            else:
-                J_pinv = J.T @ np.linalg.solve(J @ J.T + damping * np.eye(6), np.eye(6))
+            # Use existing pseudoinverse computation
+            J_pinv = compute_jacobian_pseudoinverse(J, damping=1e-4)
             
             q = q + J_pinv @ error
             q = np.mod(q, 2*np.pi)
@@ -130,18 +114,33 @@ def jacobian_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float =
     return joint_solutions[0] if poses.shape[0] == 1 else joint_solutions
 
 def sdls_ik(n_dof: int, poses: np.ndarray, max_iter: int = 100, tol: float = 1e-3) -> np.ndarray:
+    """
+    SDLS (Selectively Damped Least Squares) inverse kinematics using existing utilities
+    
+    Args:
+        n_dof: Number of degrees of freedom
+        poses: Target poses - shape (n, 6) or (6,)
+    
+    Returns:
+        Joint angles - shape (n, n_dof) or (n_dof,)
+    """
     poses = np.atleast_2d(poses)
     if poses.shape[1] < 6:
         poses = np.pad(poses, ((0, 0), (0, 6 - poses.shape[1])), 'constant')
     
-    dh_params = _create_robot_dh(n_dof)
+    # Use existing DH parameter generation
+    dh_config = {'config_type': 'standard_serial', 'link_length': 1.0}
+    dh_params = generate_dh_parameters(n_dof, dh_config)
+    
     joint_solutions = np.zeros((poses.shape[0], n_dof))
     
     for i, pose in enumerate(poses):
         T_desired = _pose_to_transform(pose)
         
         def objective(q):
-            T_current = _forward_kinematics(q, dh_params)
+            # Use existing forward kinematics
+            fk_result = forward_kinematics(q, dh_params)
+            T_current = fk_result['transformation_matrix']
             error = _pose_error(T_current, T_desired)
             return np.sum(error**2)
         
