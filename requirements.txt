@@ -1,5 +1,6 @@
 # .venv\Scripts\activate <---- To activate the virtual environment
 # pip install -r requirements.txt
+# Try to install the following versions to avoid compatibility issues
 numpy==1.26.4
 torch==2.3.0
 scikit-learn==1.5.1
