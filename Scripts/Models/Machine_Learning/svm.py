@@ -4,8 +4,6 @@ from sklearn.preprocessing import StandardScaler
 
 
 class SVMModel:
-    """Support Vector Machine model for inverse kinematics."""
-    
     def __init__(self, kernel='rbf', C=1.0, epsilon=0.1, gamma='scale'):
         # Initialize SVM model.
         self.kernel = kernel

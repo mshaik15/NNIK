@@ -5,7 +5,6 @@ from sklearn.preprocessing import StandardScaler
 
 
 class GPRModel:
-    
     def __init__(self, kernel_type='rbf', length_scale=1.0, alpha=1e-10, 
                  n_restarts_optimizer=10):
         self.kernel_type = kernel_type

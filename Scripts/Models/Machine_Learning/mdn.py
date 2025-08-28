@@ -6,8 +6,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class MDNNetwork(nn.Module):
-    """Mixture Density Network architecture."""
-    
     def __init__(self, input_dim, output_dim, hidden_layers=[128, 64], 
                  n_mixtures=5):
         super(MDNNetwork, self).__init__()

@@ -7,7 +7,6 @@ from typing import Dict, Any
 import sys
 from pathlib import Path
 
-# Add project root to path for imports
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -51,8 +50,6 @@ class ANNNetwork(nn.Module):
         return self.model(x)
 
 class ANNModel(BaseModel):
-    """Improved ANN model with better training and validation"""
-    
     def __init__(self, input_dim=6, output_dim=2, hidden_layers=[256, 128, 64], 
                  activation='relu', learning_rate=0.001, epochs=20, 
                  batch_size=128, dropout_rate=0.1, early_stopping_patience=10):
@@ -102,13 +99,9 @@ class ANNModel(BaseModel):
         return X_norm
     
     def fit(self, X_train, y_train):
-        """Train the ANN model with validation split"""
-        
-        # Convert to numpy arrays
         X_train = np.array(X_train, dtype=np.float32)
         y_train = np.array(y_train, dtype=np.float32)
-        
-        # Update output dimension based on data
+
         if self.model_params['output_dim'] != y_train.shape[1]:
             self.model_params['output_dim'] = y_train.shape[1]
         

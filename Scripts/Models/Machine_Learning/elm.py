@@ -1,7 +1,6 @@
 import numpy as np
 
 class ELMModel:
-
     def __init__(self, input_dim=2, hidden_dim=100, output_dim=2, 
                  activation='relu', random_state=42):
 

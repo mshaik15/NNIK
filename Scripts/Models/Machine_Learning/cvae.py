@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class CVAENetwork(nn.Module):
-
     def __init__(self, input_dim, condition_dim, latent_dim, hidden_dim=128):
         super(CVAENetwork, self).__init__()
         
