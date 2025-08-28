@@ -43,7 +43,6 @@ def analytical_ik(n_dof: int, poses: np.ndarray, timeout: float = 5.0) -> np.nda
     return joint_solutions[0] if n_poses == 1 and poses.shape[0] == 1 else joint_solutions
 
 def _solve_2dof(pose: np.ndarray) -> np.ndarray:
-    """2-DOF planar analytical solution"""
     x, y = pose[0], pose[1]
     r_squared = x**2 + y**2
     
@@ -64,7 +63,6 @@ def _solve_2dof(pose: np.ndarray) -> np.ndarray:
     return np.mod([q1, q2], 2*np.pi)
 
 def _solve_3dof(pose: np.ndarray) -> np.ndarray:
-    """3-DOF spatial analytical solution"""
     x, y, z = pose[:3]
     
     # Project to XY plane for first two joints
@@ -98,7 +96,6 @@ def _solve_3dof(pose: np.ndarray) -> np.ndarray:
     return np.mod([q1, q2, q3], 2*np.pi)
 
 def _solve_4dof(pose: np.ndarray) -> np.ndarray:
-    """4-DOF analytical solution using geometric decomposition"""
     x, y, z = pose[:3]
     
     # Use wrist center approach - assume last joint is for orientation
@@ -117,7 +114,6 @@ def _solve_4dof(pose: np.ndarray) -> np.ndarray:
     return np.mod([q_3dof[0], q_3dof[1], q_3dof[2], q4], 2*np.pi)
 
 def _solve_5dof(pose: np.ndarray) -> np.ndarray:
-    """5-DOF analytical solution"""
     x, y, z = pose[:3]
     
     # Geometric decoupling - solve position with first 3, orientation with last 2
@@ -133,7 +129,6 @@ def _solve_5dof(pose: np.ndarray) -> np.ndarray:
     return np.mod([q_pos[0], q_pos[1], q_pos[2], q4, q5], 2*np.pi)
 
 def _solve_6dof(pose: np.ndarray) -> np.ndarray:
-    """6-DOF analytical solution using position/orientation decoupling"""
     x, y, z = pose[:3]
     roll = pose[3] if len(pose) > 3 else 0.0
     pitch = pose[4] if len(pose) > 4 else 0.0
@@ -159,10 +154,6 @@ def _solve_6dof(pose: np.ndarray) -> np.ndarray:
     return np.mod([q_pos[0], q_pos[1], q_pos[2], q4, q5, q6], 2*np.pi)
 
 def _solve_high_dof(pose: np.ndarray, n_dof: int, start_time: float, timeout: float) -> np.ndarray:
-    """
-    High DOF (7-10) using iterative geometric decomposition
-    With timeout protection for computational complexity
-    """
     if time.time() - start_time > timeout * 0.8:  # Use 80% of timeout
         raise RuntimeError(f"High DOF analytical IK approaching timeout")
     
@@ -196,7 +187,6 @@ def _solve_high_dof(pose: np.ndarray, n_dof: int, start_time: float, timeout: fl
 
 # Test/verification functions for debugging
 def _verify_solution(n_dof: int, pose: np.ndarray, joint_angles: np.ndarray, tol: float = 0.1) -> bool:
-    """Verify if analytical solution is reasonable (for debugging)"""
     try:
         # Simple forward kinematics check
         x_fk = sum(np.cos(sum(joint_angles[:i+1])) for i in range(min(n_dof, 3)))

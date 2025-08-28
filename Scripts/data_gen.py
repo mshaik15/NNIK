@@ -169,8 +169,6 @@ def _generate_with_multiprocessing(joint_angles: np.ndarray, dh_params: List[Dic
     return poses_data, solutions_data
 
 def _generate_single_threaded(joint_angles: np.ndarray, dh_params: List[Dict[str, float]]) -> Tuple[List[Dict], List[Dict]]:
-    """Generate samples using single-threaded processing"""
-    
     poses_data = []
     solutions_data = []
     
@@ -309,7 +307,6 @@ def load_dataset(poses_file: Path, solutions_file: Path) -> Dict[str, Any]:
     }
 
 def main():
-    """Main function for standalone execution"""
     parser = argparse.ArgumentParser(description='Generate IK datasets using DH parameters')
     parser.add_argument(
         '--config',

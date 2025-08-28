@@ -38,7 +38,6 @@ def _pose_to_transform(pose: np.ndarray) -> np.ndarray:
     return T
 
 def _pose_error(T_current: np.ndarray, T_desired: np.ndarray) -> np.ndarray:
-    """Compute pose error vector"""
     pos_error = T_desired[:3, 3] - T_current[:3, 3]
     
     R_error = T_desired[:3, :3] @ T_current[:3, :3].T

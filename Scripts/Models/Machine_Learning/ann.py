@@ -14,8 +14,6 @@ sys.path.insert(0, str(project_root))
 from Scripts.base_model import BaseModel
 
 class ANNNetwork(nn.Module):
-    """PyTorch neural network architecture."""
-    
     def __init__(self, input_dim, output_dim, hidden_layers=[64, 64], 
                  activation='relu', dropout_rate=0.1):
         super(ANNNetwork, self).__init__()
@@ -82,7 +80,6 @@ class ANNModel(BaseModel):
         self.val_losses = []
         
     def _normalize_data(self, X, y=None, fit_scalers=False):
-        """Normalize input and output data"""
         if fit_scalers:
             self.X_mean = X.mean(axis=0)
             self.X_std = X.std(axis=0) + 1e-8
@@ -197,7 +194,6 @@ class ANNModel(BaseModel):
         self.model.load_state_dict(best_model_state)
         
     def predict(self, X_test):
-        """Make predictions"""
         if self.model is None:
             raise ValueError("Model must be trained before prediction")
             
@@ -218,7 +214,6 @@ class ANNModel(BaseModel):
         return y_pred
     
     def _get_model_state(self) -> Dict[str, Any]:
-        """Get model state for saving"""
         if self.model is None:
             return {}
         
@@ -233,7 +228,6 @@ class ANNModel(BaseModel):
         }
     
     def _set_model_state(self, state: Dict[str, Any]) -> None:
-        """Set model state from loading"""
         if not state:
             return
         

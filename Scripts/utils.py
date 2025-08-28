@@ -255,12 +255,10 @@ def save_json(data: Dict[str, Any], filepath: Path):
         json.dump(converted_data, f, indent=2)
 
 def load_json(filepath: Path) -> Dict[str, Any]:
-    """Load data from JSON file"""
     with open(filepath, 'r') as f:
         return json.load(f)
 
 def load_config(config_path: Path) -> Dict[str, Any]:
-    """Load YAML configuration file"""
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 

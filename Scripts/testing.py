@@ -20,7 +20,6 @@ except ImportError:
         print("Make sure you're running from the project root directory")
 
 def single_test(dof, models, data_path, results_path, sample_limit=None):
-    """Test all models on a single DOF configuration"""
     print(f"Testing DOF={dof}...")
     
     # Load data using updated format
@@ -76,7 +75,6 @@ def single_test(dof, models, data_path, results_path, sample_limit=None):
     return df
 
 def multiple_test(dof_range, models, data_path, results_path, sample_limit=None):
-    """Run tests across multiple DOF configurations"""
     all_results = []
     
     for dof in dof_range:
@@ -98,7 +96,6 @@ def multiple_test(dof_range, models, data_path, results_path, sample_limit=None)
     return combined_df
 
 def plot_scalability_analysis(df, save_path=None):
-    """Create time vs DOF and RMSE vs DOF plots"""
     if df is None or df.empty:
         print("No data to plot")
         return
@@ -158,7 +155,6 @@ def plot_scalability_analysis(df, save_path=None):
     plt.show()
 
 def plot_model_ranking(df, save_path=None):
-    """Show which models are best at different metrics"""
     if df is None or df.empty:
         return
     
@@ -200,7 +196,6 @@ def plot_model_ranking(df, save_path=None):
     return avg_metrics
 
 def print_summary_report(df):
-    """Print a clean summary report"""
     if df is None or df.empty:
         print("No results to summarize")
         return
@@ -232,7 +227,6 @@ def print_summary_report(df):
     print("="*60)
 
 def create_models(input_dim=6, output_dim=3):
-    """Create model instances with proper dimensions"""
     models = {}
     
     # Always available models
@@ -279,7 +273,6 @@ def create_models(input_dim=6, output_dim=3):
     return models
 
 def quick_test(dof_list=[3, 4, 5], model_list=None, sample_limit=500):
-    """Quick test function - UPDATED for new data format"""
     from pathlib import Path
     
     # Paths

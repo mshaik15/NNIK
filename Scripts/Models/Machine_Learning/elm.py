@@ -24,7 +24,6 @@ class ELMModel:
         np.random.seed(random_state)
         
     def _activate(self, X):
-        """Apply activation function."""
         if self.activation == 'relu':
             return np.maximum(0, X)
         elif self.activation == 'sigmoid':

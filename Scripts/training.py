@@ -22,7 +22,6 @@ def load_ik_data(poses_file: Path, solutions_file: Path) -> Tuple[np.ndarray, np
     return X, y
 
 def train_all_models(models: Dict, X_train: np.ndarray, y_train: np.ndarray) -> Dict:
-    """Train all models with timing"""
     results = {}
     
     for name, model in models.items():
@@ -85,7 +84,6 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
     return results
 
 def create_results_dataframe(evaluation_results: Dict) -> pd.DataFrame:
-    """Convert results to clean dataframe"""
     data = []
     
     for name, results in evaluation_results.items():
@@ -102,7 +100,6 @@ def create_results_dataframe(evaluation_results: Dict) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 def plot_model_comparison(df: pd.DataFrame, save_path: Path = None):
-    """Simple comparison plots"""
     if df.empty:
         print("No data to plot")
         return
@@ -138,7 +135,6 @@ def plot_model_comparison(df: pd.DataFrame, save_path: Path = None):
     plt.show()
 
 def run_complete_benchmark(dof_range, data_path, sample_size=None):
-    """Run benchmark across multiple DOFs - placeholder for your implementation"""
     # This would iterate through DOF values and run the full pipeline
     # Left as placeholder since you have the main logic in the Colab notebook
     pass

@@ -15,16 +15,13 @@ class BaseModel(ABC):
         
     @abstractmethod
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        """Train the model"""
         pass
     
     @abstractmethod
     def predict(self, X_test: np.ndarray) -> np.ndarray:
-        """Make predictions"""
         pass
     
     def fit_timed(self, X_train: np.ndarray, y_train: np.ndarray) -> float:
-        """Train model and return training time"""
         start_time = time.time()
         self.fit(X_train, y_train)
         self.training_time = time.time() - start_time
@@ -32,14 +29,12 @@ class BaseModel(ABC):
         return self.training_time
     
     def predict_timed(self, X_test: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Make predictions and return inference time"""
         start_time = time.time()
         predictions = self.predict(X_test)
         inference_time = time.time() - start_time
         return predictions, inference_time
     
     def save_model(self, filepath: Path) -> None:
-        """Save model to disk"""
         model_data = {
             'name': self.name,
             'is_trained': self.is_trained,
@@ -52,7 +47,6 @@ class BaseModel(ABC):
             pickle.dump(model_data, f)
     
     def load_model(self, filepath: Path) -> None:
-        """Load model from disk"""
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
         
@@ -64,12 +58,10 @@ class BaseModel(ABC):
     
     @abstractmethod
     def _get_model_state(self) -> Dict[str, Any]:
-        """Get model-specific state for saving"""
         pass
     
     @abstractmethod
     def _set_model_state(self, state: Dict[str, Any]) -> None:
-        """Set model-specific state from loading"""
         pass
     
     def get_info(self) -> Dict[str, Any]:

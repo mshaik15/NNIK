@@ -34,7 +34,6 @@ class CVAENetwork(nn.Module):
         )
         
     def encode(self, x, c):
-        """Encode input and condition to latent distribution parameters."""
         inputs = torch.cat([x, c], dim=1)
         h = self.encoder(inputs)
         mu = self.fc_mu(h)
@@ -42,18 +41,15 @@ class CVAENetwork(nn.Module):
         return mu, logvar
     
     def reparameterize(self, mu, logvar):
-        """Reparameterization trick."""
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
     
     def decode(self, z, c):
-        """Decode from latent space conditioned on input."""
         inputs = torch.cat([z, c], dim=1)
         return self.decoder(inputs)
     
     def forward(self, x, c):
-        """Forward pass through the network."""
         mu, logvar = self.encode(x, c)
         z = self.reparameterize(mu, logvar)
         x_recon = self.decode(z, c)

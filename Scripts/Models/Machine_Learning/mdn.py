@@ -174,7 +174,6 @@ class MDNModel:
         return y_pred
     
     def _sample_from_mixture(self, pi, mu, sigma):
-        """Sample from the Gaussian mixture."""
         batch_size = pi.size(0)
         samples = []
         
