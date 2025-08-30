@@ -7,7 +7,7 @@ import time
 import torch
 from sklearn.metrics import mean_squared_error
 from typing import Dict
-# Import training utilities
+
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
 sys.path.insert(0, str(project_root))
@@ -41,21 +41,33 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
             
             # Force CPU for inference if requested
             if force_cpu and name in ['ANN', 'MDN', 'CVAE']:
-                if hasattr(model, 'device'):
+                # Move the entire model to CPU
+                if hasattr(model, 'model') and hasattr(model.model, 'cpu'):
+                    model.model = model.model.cpu()
+                    original_device = 'cuda'
+                elif hasattr(model, 'to'):
+                    model = model.to('cpu')
+                    original_device = 'cuda'
+                elif hasattr(model, 'device'):
                     original_device = model.device
                     model.device = torch.device('cpu')
-                elif hasattr(model, 'to'):
-                    model.cpu()
+                
+                # Also ensure the model wrapper knows it's on CPU
+                if hasattr(model, 'device'):
+                    model.device = torch.device('cpu')
             
             # Timed prediction
             start_time = time.time()
             y_pred = model.predict(X_test)
             inference_time = time.time() - start_time
             
-            # Restore original device if changed
-            if force_cpu and name in ['ANN', 'MDN', 'CVAE']:
-                if hasattr(model, 'device') and 'original_device' in locals():
-                    model.device = original_device
+            # Restore original device if changed (optional)
+            if force_cpu and name in ['ANN', 'MDN', 'CVAE'] and 'original_device' in locals():
+                if original_device == 'cuda' and torch.cuda.is_available():
+                    if hasattr(model, 'model') and hasattr(model.model, 'cuda'):
+                        model.model = model.model.cuda()
+                    if hasattr(model, 'device'):
+                        model.device = torch.device('cuda')
             
             # Joint space error (this is what we actually care about)
             joint_rmse = np.sqrt(mean_squared_error(y_test, y_pred))
