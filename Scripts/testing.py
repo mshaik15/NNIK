@@ -3,99 +3,138 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
+import time
+import torch
+from sklearn.metrics import mean_squared_error
+from typing import Dict
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
 sys.path.insert(0, str(project_root))
 
 try:
-    from Scripts.training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+    from Scripts.training import load_ik_data, train_all_models
     from Scripts.Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
 except ImportError:
     try:
-        from training import load_ik_data, train_all_models, evaluate_all_models, create_results_dataframe
+        from training import load_ik_data, train_all_models
         from Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
     except ImportError as e:
         print(f"Import error: {e}")
         print("Make sure you're running from the project root directory")
 
-def single_test(dof, models, data_path, results_path, sample_limit=None):
-    print(f"Testing DOF={dof}...")
+def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.ndarray, force_cpu: bool = True) -> Dict:
+    # Evaluate all models (CPU only for fair comparison)
+    results = {}
     
-    # Load data using updated format
-    train_poses = data_path / 'Training' / f'{dof}_training.json'
-    train_solutions = data_path / 'Training' / f'{dof}_training_solutions.json'
-    test_poses = data_path / 'Testing' / f'{dof}_testing.json' 
-    test_solutions = data_path / 'Testing' / f'{dof}_testing_solutions.json'
+    if force_cpu:
+        print("Evaluation using CPU only for fair comparison")
     
-    # Check if files exist
-    for file_path in [train_poses, train_solutions, test_poses, test_solutions]:
-        if not file_path.exists():
-            raise FileNotFoundError(f"Required data file not found: {file_path}")
-    
-    X_train, y_train = load_ik_data(train_poses, train_solutions)
-    X_test, y_test = load_ik_data(test_poses, test_solutions)
-    
-    # Subsample if needed
-    if sample_limit:
-        if len(X_train) > sample_limit:
-            idx = np.random.choice(len(X_train), sample_limit, replace=False)
-            X_train, y_train = X_train[idx], y_train[idx]
-        if len(X_test) > sample_limit//2:
-            idx = np.random.choice(len(X_test), sample_limit//2, replace=False)
-            X_test, y_test = X_test[idx], y_test[idx]
-    
-    print(f"  Data: Train={X_train.shape[0]}, Test={X_test.shape[0]}")
-    print(f"  Input dims: {X_train.shape[1]} (pose), Output dims: {y_train.shape[1]} (joints)")
-    
-    # Update model dimensions based on actual data
-    for model in models.values():
-        if hasattr(model, 'model_params'):
-            model.model_params['input_dim'] = X_train.shape[1]  # Should be 6 for [x,y,z,roll,pitch,yaw]
-            model.model_params['output_dim'] = y_train.shape[1]  # Should be dof
-        
-        # Update other models that don't use model_params
-        if hasattr(model, 'input_dim'):
-            model.input_dim = X_train.shape[1]
-        if hasattr(model, 'output_dim'):
-            model.output_dim = y_train.shape[1]
-    
-    # Train and evaluate using existing functions (they're now updated)
-    training_results = train_all_models(models, X_train, y_train)
-    evaluation_results = evaluate_all_models(training_results, X_test, y_test)
-    df = create_results_dataframe(evaluation_results)
-    
-    if not df.empty:
-        df['dof'] = dof
-        # Save individual results
-        results_path.mkdir(parents=True, exist_ok=True)
-        df.to_csv(results_path / f'dof_{dof}_results.csv', index=False)
-        print(f"  ✓ Results saved for DOF={dof}")
-    
-    return df
-
-def multiple_test(dof_range, models, data_path, results_path, sample_limit=None):
-    all_results = []
-    
-    for dof in dof_range:
+    for name, model_data in trained_models.items():
+        if 'error' in model_data:
+            results[name] = model_data
+            continue
+            
+        print(f"Evaluating {name}...")
         try:
-            df = single_test(dof, models, data_path, results_path, sample_limit)
-            if not df.empty:
-                all_results.append(df)
+            model = model_data['model']
+            
+            # Force CPU for inference if requested
+            if force_cpu and name in ['ANN', 'MDN', 'CVAE']:
+                if hasattr(model, 'device'):
+                    original_device = model.device
+                    model.device = torch.device('cpu')
+                elif hasattr(model, 'to'):
+                    model.cpu()
+            
+            # Timed prediction
+            start_time = time.time()
+            y_pred = model.predict(X_test)
+            inference_time = time.time() - start_time
+            
+            # Restore original device if changed
+            if force_cpu and name in ['ANN', 'MDN', 'CVAE']:
+                if hasattr(model, 'device') and 'original_device' in locals():
+                    model.device = original_device
+            
+            # Joint space error (this is what we actually care about)
+            joint_rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+            # For compatibility with existing plots, set position_rmse = joint_rmse
+            position_rmse = joint_rmse
+            
+            results[name] = {
+                'model': model,
+                'position_rmse': position_rmse,
+                'joint_rmse': joint_rmse,
+                'training_time': model_data['training_time'],
+                'inference_time': inference_time,
+                'inference_time_per_sample': inference_time / len(X_test)
+            }
+            
+            print(f"  ✓ Joint RMSE: {joint_rmse:.4f}, Inference: {inference_time:.3f}s")
+            
         except Exception as e:
-            print(f"  ✗ Failed DOF={dof}: {e}")
+            print(f"  ✗ Failed: {str(e)}")
+            results[name] = {'error': str(e)}
     
-    if not all_results:
-        print("No successful results to combine")
-        return None
+    return results
+
+def create_results_dataframe(evaluation_results: Dict) -> pd.DataFrame:
+    # Convert evaluation results to DataFrame
+    data = []
     
-    # Combine results
-    combined_df = pd.concat(all_results, ignore_index=True)
-    combined_df.to_csv(results_path / 'all_results.csv', index=False)
+    for name, results in evaluation_results.items():
+        if 'error' not in results:
+            data.append({
+                'model': name,
+                'position_rmse': results['position_rmse'],
+                'joint_rmse': results['joint_rmse'],
+                'training_time': results['training_time'],
+                'inference_time': results['inference_time'],
+                'inference_time_per_sample': results['inference_time_per_sample']
+            })
     
-    return combined_df
+    return pd.DataFrame(data)
+
+def plot_model_comparison(df: pd.DataFrame, save_path: Path = None):
+    # Plot model comparison charts
+    if df.empty:
+        print("No data to plot")
+        return
+        
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle('Model Comparison', fontsize=14)
+    
+    # Position accuracy
+    axes[0,0].bar(df['model'], df['position_rmse'])
+    axes[0,0].set_title('Position RMSE (lower is better)')
+    axes[0,0].tick_params(axis='x', rotation=45)
+    
+    # Joint accuracy  
+    axes[0,1].bar(df['model'], df['joint_rmse'])
+    axes[0,1].set_title('Joint RMSE (lower is better)')
+    axes[0,1].tick_params(axis='x', rotation=45)
+    
+    # Training speed
+    axes[1,0].bar(df['model'], df['training_time'])
+    axes[1,0].set_title('Training Time (lower is better)')
+    axes[1,0].set_yscale('log')
+    axes[1,0].tick_params(axis='x', rotation=45)
+    
+    # Inference speed
+    axes[1,1].bar(df['model'], df['inference_time_per_sample'] * 1000)
+    axes[1,1].set_title('Inference Time per Sample (ms)')
+    axes[1,1].set_yscale('log')
+    axes[1,1].tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.show()
 
 def plot_scalability_analysis(df, save_path=None):
+    # Plot scalability analysis across DOFs
     if df is None or df.empty:
         print("No data to plot")
         return
@@ -155,6 +194,7 @@ def plot_scalability_analysis(df, save_path=None):
     plt.show()
 
 def plot_model_ranking(df, save_path=None):
+    # Plot model ranking based on performance
     if df is None or df.empty:
         return
     
@@ -196,6 +236,7 @@ def plot_model_ranking(df, save_path=None):
     return avg_metrics
 
 def print_summary_report(df):
+    # Print summary report of results
     if df is None or df.empty:
         print("No results to summarize")
         return
@@ -227,6 +268,7 @@ def print_summary_report(df):
     print("="*60)
 
 def create_models(input_dim=6, output_dim=3):
+    # Create all available models
     models = {}
     
     # Always available models
@@ -239,6 +281,7 @@ def create_models(input_dim=6, output_dim=3):
     models['KNN'] = KNNModel(n_neighbors=5)
     models['ELM'] = ELMModel(input_dim=input_dim, output_dim=output_dim, hidden_dim=50)
     models['RandomForest'] = RandomForestModel(n_estimators=25)
+    
     try:
         models['SVM'] = SVMModel(kernel='rbf', C=1.0, epsilon=0.1)
     except Exception as e:
@@ -272,46 +315,78 @@ def create_models(input_dim=6, output_dim=3):
     
     return models
 
-def quick_test(dof_list=[3, 4, 5], model_list=None, sample_limit=500):
-    from pathlib import Path
+def single_test(dof, models, data_path, results_path, sample_limit=None):
+    # Test a single DOF configuration
+    print(f"Testing DOF={dof}...")
     
-    # Paths
-    PROJECT_PATH = Path('.')
-    DATA_PATH = PROJECT_PATH / 'data'
-    RESULTS_PATH = PROJECT_PATH / 'results'
+    # Load data using updated format
+    train_poses = data_path / 'Training' / f'{dof}_training.json'
+    train_solutions = data_path / 'Training' / f'{dof}_training_solutions.json'
+    test_poses = data_path / 'Testing' / f'{dof}_testing.json' 
+    test_solutions = data_path / 'Testing' / f'{dof}_testing_solutions.json'
     
-    RESULTS_PATH.mkdir(exist_ok=True)
+    # Check if files exist
+    for file_path in [train_poses, train_solutions, test_poses, test_solutions]:
+        if not file_path.exists():
+            raise FileNotFoundError(f"Required data file not found: {file_path}")
     
-    # Verify data exists
-    if not DATA_PATH.exists():
-        print(f"Data directory not found: {DATA_PATH}")
-        print("Run: python Scripts/data_gen.py")
-        return None, None
-
-    # Create models
-    if model_list is None:
-        model_list = ['ANN', 'KNN', 'ELM', 'RandomForest']
+    X_train, y_train = load_ik_data(train_poses, train_solutions)
+    X_test, y_test = load_ik_data(test_poses, test_solutions)
     
-    # Create model instances
-    models = {}
-    all_models = create_models()
-    for model_name in model_list:
-        if model_name in all_models:
-            models[model_name] = all_models[model_name]
-        else:
-            print(f"Warning: Model {model_name} not available")
+    # Subsample if needed
+    if sample_limit:
+        if len(X_train) > sample_limit:
+            idx = np.random.choice(len(X_train), sample_limit, replace=False)
+            X_train, y_train = X_train[idx], y_train[idx]
+        if len(X_test) > sample_limit//2:
+            idx = np.random.choice(len(X_test), sample_limit//2, replace=False)
+            X_test, y_test = X_test[idx], y_test[idx]
     
-    print(f"Quick test: DOFs={dof_list}, Models={list(models.keys())}")
-    print(f"Data path: {DATA_PATH}")
-    print(f"Results path: {RESULTS_PATH}")
-
-    results_df = multiple_test(dof_list, models, DATA_PATH, RESULTS_PATH, sample_limit)
+    print(f"  Data: Train={X_train.shape[0]}, Test={X_test.shape[0]}")
+    print(f"  Input dims: {X_train.shape[1]} (pose), Output dims: {y_train.shape[1]} (joints)")
     
-    if results_df is not None:
-        plot_scalability_analysis(results_df, RESULTS_PATH / 'scalability.png')
-        avg_metrics = plot_model_ranking(results_df, RESULTS_PATH / 'ranking.png')
-        print_summary_report(results_df)
+    # Update model dimensions based on actual data
+    for model in models.values():
+        if hasattr(model, 'model_params'):
+            model.model_params['input_dim'] = X_train.shape[1]
+            model.model_params['output_dim'] = y_train.shape[1]
         
-        return results_df, avg_metrics
+        if hasattr(model, 'input_dim'):
+            model.input_dim = X_train.shape[1]
+        if hasattr(model, 'output_dim'):
+            model.output_dim = y_train.shape[1]
     
-    return None, None
+    # Train and evaluate
+    training_results = train_all_models(models, X_train, y_train)
+    evaluation_results = evaluate_all_models(training_results, X_test, y_test)
+    df = create_results_dataframe(evaluation_results)
+    
+    if not df.empty:
+        df['dof'] = dof
+        results_path.mkdir(parents=True, exist_ok=True)
+        df.to_csv(results_path / f'dof_{dof}_results.csv', index=False)
+        print(f"  ✓ Results saved for DOF={dof}")
+    
+    return df
+
+def multiple_test(dof_range, models, data_path, results_path, sample_limit=None):
+    # Test multiple DOF configurations
+    all_results = []
+    
+    for dof in dof_range:
+        try:
+            df = single_test(dof, models, data_path, results_path, sample_limit)
+            if not df.empty:
+                all_results.append(df)
+        except Exception as e:
+            print(f"  ✗ Failed DOF={dof}: {e}")
+    
+    if not all_results:
+        print("No successful results to combine")
+        return None
+    
+    # Combine results
+    combined_df = pd.concat(all_results, ignore_index=True)
+    combined_df.to_csv(results_path / 'all_results.csv', index=False)
+    
+    return combined_df
