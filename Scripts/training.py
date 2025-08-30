@@ -7,7 +7,7 @@ import torch
 from concurrent.futures import ThreadPoolExecutor
 
 def load_ik_data(poses_file: Path, solutions_file: Path) -> Tuple[np.ndarray, np.ndarray]:
-    # Load inverse kinematics data from JSON files
+    # Load inverse kinematics data from JSON file
     with open(poses_file, 'r') as f:
         poses_data = json.load(f)
     with open(solutions_file, 'r') as f:
