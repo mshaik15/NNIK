@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pandas as pd
 from matplotlib.gridspec import GridSpec
 import warnings
@@ -7,7 +8,6 @@ warnings.filterwarnings('ignore')
 
 
 def style():
-    # Setup publication-quality figure style
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.rcParams.update({
         'font.family': 'sans-serif',
@@ -347,14 +347,13 @@ def create_comprehensive_dashboard(df, save_path=None):
     return fig
 
 def generate_all_figures(df, output_dir='./figures/'):
-    # Generate all figures
-    import os
+    # Generate all figure
     os.makedirs(output_dir, exist_ok=True)
     
     print("Generating Academic Research Figures")
     print("=" * 60)
     
-    # Individual plots
+    # Individual plot
     plots = [
         ("Accuracy-Speed Tradeoff", 
          lambda: plot_accuracy_speed_tradeoff(df, f"{output_dir}/accuracy_speed_tradeoff.pdf")),
