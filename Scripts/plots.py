@@ -80,7 +80,7 @@ def plot_training_time_distribution(results_df, ax):
                f'{val:.1f}s', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
 def plot_inference_speed_comparison(results_df, ax):
-    # Plot inference speed comparison
+    # Plot inference speed comparisons
     ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
     inference_times = ml_df.groupby('model')['inference_time_per_sample'].mean() * 1000
     inference_times = inference_times.sort_values()
