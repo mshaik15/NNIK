@@ -96,7 +96,7 @@ def plot_inference_speed_comparison(results_df, ax):
     ax.grid(True, alpha=0.3)
 
 def plot_best_model_distribution(results_df, ax):
-    # Plot pie chart of best model distribution
+    # Plot pie chart of best model distributiona
     ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
     
     if 'dof' in ml_df.columns and len(ml_df) > 0:
