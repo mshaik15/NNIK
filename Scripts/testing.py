@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 import time
@@ -15,16 +14,95 @@ sys.path.insert(0, str(project_root))
 try:
     from Scripts.training import load_ik_data, train_all_models
     from Scripts.Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
+    from Scripts.Models.Traditional import analytical_ik, jacobian_ik, sdls_ik
 except ImportError:
     try:
         from training import load_ik_data, train_all_models
         from Models.Machine_Learning import ANNModel, KNNModel, ELMModel, RandomForestModel, SVMModel, GPRModel, MDNModel, CVAEModel
+        from Models.Traditional import analytical_ik, jacobian_ik, sdls_ik
     except ImportError as e:
         print(f"Import error: {e}")
         print("Make sure you're running from the project root directory")
 
+class Traditional:
+    def __init__(self, method_name, ik_function, timeout_per_sample=0.5):
+        self.name = method_name
+        self.ik_function = ik_function
+        self.timeout_per_sample = timeout_per_sample
+        self.is_trained = True
+        self.training_time = 0.0  # Traditional methods don't need training
+        self.output_dim = None
+        self.timeout_count = 0
+        self.failure_count = 0
+    
+    def fit(self, X_train, y_train):
+        self.training_time = 0.0
+        self.output_dim = y_train.shape[1]
+        self.is_trained = True
+        return self
+    
+    def predict(self, X_test):
+        results = []
+        self.timeout_count = 0
+        self.failure_count = 0
+        
+        print(f"  Running {self.name} on {len(X_test)} samples (timeout: {self.timeout_per_sample}s per sample)...")
+        
+        for i, pose in enumerate(X_test):
+            try:
+                # Prepare pose (limit to 6D and pad if needed)
+                pose_6d = pose[:6] if len(pose) >= 6 else np.pad(pose, (0, 6-len(pose)), 'constant')
+                
+                # Call traditional IK with timeout check
+                joint_angles = self._solve_with_timeout(self.output_dim, pose_6d)
+                
+                # Ensure correct output dimension
+                if len(joint_angles) != self.output_dim:
+                    joint_angles = np.resize(joint_angles, self.output_dim)
+                
+                results.append(joint_angles)
+                
+            except TimeoutError:
+                self.timeout_count += 1
+                # Use fallback random solution for timeout cases
+                fallback = np.random.uniform(0, 2*np.pi, self.output_dim)
+                results.append(fallback)
+                
+            except Exception as e:
+                # Other failures also get fallback
+                self.failure_count += 1
+                fallback = np.random.uniform(0, 2*np.pi, self.output_dim)
+                results.append(fallback)
+        
+        total_failures = self.timeout_count + self.failure_count
+        success_rate = (len(X_test) - total_failures) / len(X_test) * 100
+        print(f"    {self.name}: {success_rate:.1f}% success rate ({self.timeout_count} timeouts, {self.failure_count} other failures)")
+        
+        return np.array(results)
+    
+    def _solve_with_timeout(self, dof, pose):
+        start_time = time.time()
+        
+        try:
+            # Call the actual IK function
+            result = self.ik_function(dof, pose)
+            
+            # Check if we exceeded the time limit
+            elapsed = time.time() - start_time
+            if elapsed > self.timeout_per_sample:
+                raise TimeoutError(f"Exceeded {self.timeout_per_sample}s limit")
+            
+            return result
+            
+        except Exception as e:
+            elapsed = time.time() - start_time
+            if elapsed > self.timeout_per_sample:
+                raise TimeoutError(f"Timeout after {elapsed:.3f}s")
+            else:
+                # Re-raise the original exception
+                raise e
+
 def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.ndarray, force_cpu: bool = True) -> Dict:
-    # Evaluate all models (CPU only for fair comparison)
     results = {}
     
     if force_cpu:
@@ -39,21 +117,16 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
         try:
             model = model_data['model']
             
-            # Force CPU for inference if requested
+            # Force CPU for inference if requested (for ML models)
             if force_cpu and name in ['ANN', 'MDN', 'CVAE']:
-                # Move the entire model to CPU
+                original_device = None
                 if hasattr(model, 'model') and hasattr(model.model, 'cpu'):
+                    original_device = model.device if hasattr(model, 'device') else 'cuda'
                     model.model = model.model.cpu()
-                    original_device = 'cuda'
                 elif hasattr(model, 'to'):
                     model = model.to('cpu')
-                    original_device = 'cuda'
                 elif hasattr(model, 'device'):
                     original_device = model.device
-                    model.device = torch.device('cpu')
-                
-                # Also ensure the model wrapper knows it's on CPU
-                if hasattr(model, 'device'):
                     model.device = torch.device('cpu')
             
             # Timed prediction
@@ -61,19 +134,17 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
             y_pred = model.predict(X_test)
             inference_time = time.time() - start_time
             
-            # Restore original device if changed (optional)
-            if force_cpu and name in ['ANN', 'MDN', 'CVAE'] and 'original_device' in locals():
+            # Restore original device if changed
+            if force_cpu and name in ['ANN', 'MDN', 'CVAE'] and original_device:
                 if original_device == 'cuda' and torch.cuda.is_available():
                     if hasattr(model, 'model') and hasattr(model.model, 'cuda'):
                         model.model = model.model.cuda()
                     if hasattr(model, 'device'):
                         model.device = torch.device('cuda')
             
-            # Joint space error (this is what we actually care about)
+            # Calculate performance metrics
             joint_rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-
-            # For compatibility with existing plots, set position_rmse = joint_rmse
-            position_rmse = joint_rmse
+            position_rmse = joint_rmse  # For compatibility with existing analysis
             
             results[name] = {
                 'model': model,
@@ -92,198 +163,46 @@ def evaluate_all_models(trained_models: Dict, X_test: np.ndarray, y_test: np.nda
     
     return results
 
-def create_results_dataframe(evaluation_results: Dict) -> pd.DataFrame:
-    # Convert evaluation results to DataFrame
+def results_dataframe(evaluation_results: Dict, dof: int = None, model_type_mapping: Dict = None) -> pd.DataFrame:
     data = []
     
     for name, results in evaluation_results.items():
         if 'error' not in results:
-            data.append({
+            row = {
                 'model': name,
                 'position_rmse': results['position_rmse'],
                 'joint_rmse': results['joint_rmse'],
                 'training_time': results['training_time'],
                 'inference_time': results['inference_time'],
-                'inference_time_per_sample': results['inference_time_per_sample']
-            })
+                'inference_time_per_sample': results['inference_time_per_sample'],
+                'status': 'success'
+            }
+            
+            # Add DOF if provided
+            if dof is not None:
+                row['dof'] = dof
+                
+            # Add model type if mapping provided
+            if model_type_mapping and name in model_type_mapping:
+                row['model_type'] = model_type_mapping[name]
+            elif name.endswith('_IK'):
+                row['model_type'] = 'Traditional'
+            else:
+                row['model_type'] = 'ML'
+                
+            # Add timeout information for traditional methods
+            if hasattr(results['model'], 'timeout_count'):
+                row['timeout_count'] = results['model'].timeout_count
+                row['failure_count'] = results['model'].failure_count
+                
+            data.append(row)
     
     return pd.DataFrame(data)
 
-def plot_model_comparison(df: pd.DataFrame, save_path: Path = None):
-    # Plot model comparison charts
-    if df.empty:
-        print("No data to plot")
-        return
-        
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle('Model Comparison', fontsize=14)
-    
-    # Position accuracy
-    axes[0,0].bar(df['model'], df['position_rmse'])
-    axes[0,0].set_title('Position RMSE (lower is better)')
-    axes[0,0].tick_params(axis='x', rotation=45)
-    
-    # Joint accuracy  
-    axes[0,1].bar(df['model'], df['joint_rmse'])
-    axes[0,1].set_title('Joint RMSE (lower is better)')
-    axes[0,1].tick_params(axis='x', rotation=45)
-    
-    # Training speed
-    axes[1,0].bar(df['model'], df['training_time'])
-    axes[1,0].set_title('Training Time (lower is better)')
-    axes[1,0].set_yscale('log')
-    axes[1,0].tick_params(axis='x', rotation=45)
-    
-    # Inference speed
-    axes[1,1].bar(df['model'], df['inference_time_per_sample'] * 1000)
-    axes[1,1].set_title('Inference Time per Sample (ms)')
-    axes[1,1].set_yscale('log')
-    axes[1,1].tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.show()
-
-def plot_scalability_analysis(df, save_path=None):
-    # Plot scalability analysis across DOFs
-    if df is None or df.empty:
-        print("No data to plot")
-        return
-    
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle('Model Scalability Analysis', fontsize=14)
-    
-    # 1. Training Time vs DOF
-    ax1 = axes[0, 0]
-    for model in df['model'].unique():
-        model_data = df[df['model'] == model]
-        ax1.plot(model_data['dof'], model_data['training_time'], 'o-', label=model, linewidth=2)
-    ax1.set_xlabel('DOF')
-    ax1.set_ylabel('Training Time (s)')
-    ax1.set_title('Training Time vs DOF')
-    ax1.set_yscale('log')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # 2. Position RMSE vs DOF
-    ax2 = axes[0, 1]
-    for model in df['model'].unique():
-        model_data = df[df['model'] == model]
-        ax2.plot(model_data['dof'], model_data['position_rmse'], 'o-', label=model, linewidth=2)
-    ax2.set_xlabel('DOF')
-    ax2.set_ylabel('Position RMSE')
-    ax2.set_title('Position Accuracy vs DOF')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # 3. Joint RMSE vs DOF
-    ax3 = axes[1, 0]
-    for model in df['model'].unique():
-        model_data = df[df['model'] == model]
-        ax3.plot(model_data['dof'], model_data['joint_rmse'], 'o-', label=model, linewidth=2)
-    ax3.set_xlabel('DOF')
-    ax3.set_ylabel('Joint RMSE')
-    ax3.set_title('Joint Accuracy vs DOF')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    # 4. Inference Time vs DOF
-    ax4 = axes[1, 1]
-    for model in df['model'].unique():
-        model_data = df[df['model'] == model]
-        ax4.plot(model_data['dof'], model_data['inference_time_per_sample']*1000, 'o-', label=model, linewidth=2)
-    ax4.set_xlabel('DOF')
-    ax4.set_ylabel('Inference Time (ms)')
-    ax4.set_title('Inference Speed vs DOF')
-    ax4.set_yscale('log')
-    ax4.legend()
-    ax4.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.show()
-
-def plot_model_ranking(df, save_path=None):
-    # Plot model ranking based on performance
-    if df is None or df.empty:
-        return
-    
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Average performance across all DOFs
-    avg_metrics = df.groupby('model').agg({
-        'position_rmse': 'mean',
-        'joint_rmse': 'mean',
-        'training_time': 'mean',
-        'inference_time_per_sample': 'mean'
-    }).round(4)
-    
-    # 1. Accuracy ranking
-    accuracy_score = avg_metrics['position_rmse'].rank() + avg_metrics['joint_rmse'].rank()
-    accuracy_ranking = accuracy_score.sort_values()
-    
-    axes[0].barh(range(len(accuracy_ranking)), accuracy_ranking.values)
-    axes[0].set_yticks(range(len(accuracy_ranking)))
-    axes[0].set_yticklabels(accuracy_ranking.index)
-    axes[0].set_xlabel('Accuracy Rank (lower is better)')
-    axes[0].set_title('Model Accuracy Ranking')
-    
-    # 2. Speed ranking
-    speed_score = avg_metrics['training_time'].rank() + avg_metrics['inference_time_per_sample'].rank()
-    speed_ranking = speed_score.sort_values()
-    
-    axes[1].barh(range(len(speed_ranking)), speed_ranking.values)
-    axes[1].set_yticks(range(len(speed_ranking)))
-    axes[1].set_yticklabels(speed_ranking.index)
-    axes[1].set_xlabel('Speed Rank (lower is better)')
-    axes[1].set_title('Model Speed Ranking')
-    
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.show()
-    
-    return avg_metrics
-
-def print_summary_report(df):
-    # Print summary report of results
-    if df is None or df.empty:
-        print("No results to summarize")
-        return
-    
-    print("\n" + "="*60)
-    print("BENCHMARK REPORT")
-    print("-"*60)
-    
-    # Overall statistics
-    print(f"DOF Range Tested: {df['dof'].min()} to {df['dof'].max()}")
-    print(f"Models Tested: {', '.join(df['model'].unique())}")
-    print(f"Total Experiments: {len(df)}")
-    
-    # Best performers
-    print(f"\n🏆 BEST PERFORMERS:")
-    best_pos = df.loc[df['position_rmse'].idxmin()]
-    best_joint = df.loc[df['joint_rmse'].idxmin()]
-    fastest = df.loc[df['training_time'].idxmin()]
-    
-    print(f"  Best Position Accuracy: {best_pos['model']} (DOF={best_pos['dof']}, RMSE={best_pos['position_rmse']:.4f})")
-    print(f"  Best Joint Accuracy: {best_joint['model']} (DOF={best_joint['dof']}, RMSE={best_joint['joint_rmse']:.4f})")
-    print(f"  Fastest Training: {fastest['model']} (DOF={fastest['dof']}, Time={fastest['training_time']:.2f}s)")
-    
-    # Average performance across all DOFs
-    print(f"\nAVERAGE PERFORMANCE (across all DOFs):")
-    avg_perf = df.groupby('model')[['position_rmse', 'joint_rmse', 'training_time']].mean().round(4)
-    print(avg_perf)
-    
-    print("="*60)
-
-def create_models(input_dim=6, output_dim=3):
-    # Create all available models
+def create_ml_models(input_dim=6, output_dim=3):
     models = {}
     
-    # Always available models
+    # Core models (always available)
     models['ANN'] = ANNModel(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -294,6 +213,7 @@ def create_models(input_dim=6, output_dim=3):
     models['ELM'] = ELMModel(input_dim=input_dim, output_dim=output_dim, hidden_dim=50)
     models['RandomForest'] = RandomForestModel(n_estimators=25)
     
+    # Optional models (may not be available in all environments)
     try:
         models['SVM'] = SVMModel(kernel='rbf', C=1.0, epsilon=0.1)
     except Exception as e:
@@ -327,11 +247,19 @@ def create_models(input_dim=6, output_dim=3):
     
     return models
 
+def create_traditional_models(output_dim=3, timeout_analytical=0.2, timeout_jacobian=0.5, timeout_sdls=0.8):
+    traditional_models = {
+        'Analytical_IK': Traditional('Analytical', analytical_ik, timeout_analytical),
+        'Jacobian_IK': Traditional('Jacobian', jacobian_ik, timeout_jacobian),
+        'SDLS_IK': Traditional('SDLS', sdls_ik, timeout_sdls)
+    }
+    
+    return traditional_models
+
 def single_test(dof, models, data_path, results_path, sample_limit=None):
-    # Test a single DOF configuration
     print(f"Testing DOF={dof}...")
     
-    # Load data using updated format
+    # Load data
     train_poses = data_path / 'Training' / f'{dof}_training.json'
     train_solutions = data_path / 'Training' / f'{dof}_training_solutions.json'
     test_poses = data_path / 'Testing' / f'{dof}_testing.json' 
@@ -371,10 +299,9 @@ def single_test(dof, models, data_path, results_path, sample_limit=None):
     # Train and evaluate
     training_results = train_all_models(models, X_train, y_train)
     evaluation_results = evaluate_all_models(training_results, X_test, y_test)
-    df = create_results_dataframe(evaluation_results)
+    df = results_dataframe(evaluation_results, dof=dof)
     
     if not df.empty:
-        df['dof'] = dof
         results_path.mkdir(parents=True, exist_ok=True)
         df.to_csv(results_path / f'dof_{dof}_results.csv', index=False)
         print(f"  ✓ Results saved for DOF={dof}")
@@ -382,7 +309,6 @@ def single_test(dof, models, data_path, results_path, sample_limit=None):
     return df
 
 def multiple_test(dof_range, models, data_path, results_path, sample_limit=None):
-    # Test multiple DOF configurations
     all_results = []
     
     for dof in dof_range:
