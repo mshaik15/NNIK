@@ -1,432 +1,401 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from matplotlib.gridspec import GridSpec
 import warnings
 warnings.filterwarnings('ignore')
 
-def setup_plot_style():
-    # Setup consistent visual style for all plots
-    plt.rcParams['figure.facecolor'] = 'white'
-    plt.rcParams['axes.facecolor'] = 'white'
-    plt.rcParams['axes.edgecolor'] = 'gray'
-    plt.rcParams['axes.linewidth'] = 0.8
-    plt.rcParams['axes.grid'] = True
-    plt.rcParams['grid.alpha'] = 0.3
-    plt.rcParams['grid.color'] = 'gray'
-    plt.rcParams['font.size'] = 10
 
-def get_model_colors(results_df):
-    # Create consistent color mapping for models using matplotlib colors
-    unique_models = results_df['model'].unique()
-    # Use matplotlib's tab colors and cycle through them
-    colors = plt.cm.tab10(np.linspace(0, 1, len(unique_models)))
-    return dict(zip(unique_models, colors))
+def style():
+    # Setup publication-quality figure style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    plt.rcParams.update({
+        'font.family': 'sans-serif',
+        'font.sans-serif': ['Arial', 'DejaVu Sans'],
+        'font.size': 10,
+        'axes.labelsize': 11,
+        'axes.titlesize': 12,
+        'legend.fontsize': 9,
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+        'axes.edgecolor': '#333333',
+        'axes.linewidth': 0.8,
+        'axes.grid': True,
+        'grid.alpha': 0.15,
+        'grid.color': '#666666',
+        'lines.linewidth': 2,
+        'lines.markersize': 7
+    })
 
-def plot_accuracy_vs_speed_tradeoff(results_df, ax, model_colors):
-    # Plot accuracy vs speed tradeoff for ML models
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
+def colors():
+    # Get color palette based on inferno colormap
+    return {
+        'ml': '#FCA311',           # Warm orange/yellow
+        'traditional': '#370617',   # Deep purple
+        'accent': '#DC2F02',        # Red accent
+        'highlight': '#FFBA08'      # Bright yellow
+    }
+
+def model_colors(models):
+    # Generate colors for individual models using gradient
+    n = len(models)
+    cmap = plt.cm.YlOrRd
+    return {model: cmap(i/n) for i, model in enumerate(models)}
+
+
+def split_by_type(df):
+    # Split dataframe by model type
+    ml_df = df[df['model_type'] == 'ML'] if 'model_type' in df.columns else df
+    trad_df = df[df['model_type'] == 'Traditional'] if 'model_type' in df.columns else pd.DataFrame()
+    return ml_df, trad_df
+
+def calculate_stats(df, group_col, value_col, scale=1):
+    # Calculate mean and std for grouped data
+    grouped = df.groupby(group_col)[value_col]
+    means = grouped.mean() * scale
+    stds = grouped.std() * scale
+    return means, stds
+
+
+def plot_accuracy_speed_tradeoff(df, save_path=None):
+    # Accuracy vs Speed Tradeoff
+    style()
+    ml_df, _ = split_by_type(df)
+    model_colors = model_colors(ml_df['model'].unique())
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
     
     for model in ml_df['model'].unique():
-        model_data = ml_df[ml_df['model'] == model]
-        avg_acc = model_data['joint_rmse'].mean()
-        avg_time = model_data['training_time'].mean()
-        ax.scatter(avg_time, avg_acc, s=120, alpha=0.8,
-                  label=model, color=model_colors.get(model, 'blue'), 
-                  edgecolors='white', linewidth=1)
-        ax.annotate(model, (avg_time, avg_acc), xytext=(8, 8),
-                   textcoords='offset points', fontsize=9, fontweight='bold')
-
-    ax.set_xlabel('Average Training Time (s)', fontsize=11, fontweight='bold')
-    ax.set_ylabel('Average Joint RMSE', fontsize=11, fontweight='bold')
-    ax.set_title('Accuracy vs Speed Tradeoff', fontsize=12, fontweight='bold', pad=20)
+        data = ml_df[ml_df['model'] == model]
+        ax.scatter(data['training_time'].mean(), data['joint_rmse'].mean(),
+                  s=120, alpha=0.8, color=model_colors[model], 
+                  edgecolors='white', linewidth=2, label=model)
+    
+    ax.set_xlabel('Training Time (s)', fontweight='bold')
+    ax.set_ylabel('Joint RMSE', fontweight='bold')
+    ax.set_title('Accuracy-Speed Tradeoff', fontsize=14, fontweight='bold')
     ax.set_xscale('log')
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.2)
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
 
-def plot_performance_heatmap(results_df, ax):
-    # Plot model performance heatmap
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    pivot_rmse = ml_df.pivot_table(values='joint_rmse', index='model', columns='dof', aggfunc='mean')
+def plot_rmse_heatmap(df, save_path=None):
+    # RMSE Heatmap across models and DOF
+    style()
+    ml_df, _ = split_by_type(df)
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    pivot = ml_df.pivot_table(values='joint_rmse', index='model', columns='dof', aggfunc='mean')
+    im = ax.imshow(pivot.values, cmap='YlOrRd', aspect='auto', interpolation='bilinear')
+    
+    ax.set_xticks(range(len(pivot.columns)))
+    ax.set_xticklabels(pivot.columns)
+    ax.set_yticks(range(len(pivot.index)))
+    ax.set_yticklabels(pivot.index)
+    ax.set_xlabel('DOF', fontweight='bold')
+    ax.set_ylabel('Model', fontweight='bold')
+    ax.set_title('Joint RMSE Heatmap', fontsize=14, fontweight='bold')
+    
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='RMSE')
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
 
-    if not pivot_rmse.empty:
-        im = ax.imshow(pivot_rmse.values, cmap='viridis', aspect='auto', interpolation='bilinear')
-        ax.set_xticks(range(len(pivot_rmse.columns)))
-        ax.set_xticklabels(pivot_rmse.columns, fontweight='bold')
-        ax.set_yticks(range(len(pivot_rmse.index)))
-        ax.set_yticklabels(pivot_rmse.index, fontweight='bold')
-        ax.set_xlabel('DOF', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Model', fontsize=11, fontweight='bold')
-        ax.set_title('Joint RMSE Heatmap', fontsize=12, fontweight='bold', pad=20)
-
-        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label('Joint RMSE', fontweight='bold')
-
-def plot_training_time_distribution(results_df, ax):
-    # Plot training time distribution
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    training_times = ml_df.groupby('model')['training_time'].mean().sort_values()
-    colors = ['green' if t < 10 else 'orange' if t < 30 else 'red' for t in training_times.values]
-
-    bars = ax.bar(range(len(training_times)), training_times.values, 
-                  color=colors, alpha=0.8, edgecolor='white')
-    ax.set_xticks(range(len(training_times)))
-    ax.set_xticklabels(training_times.index, rotation=45, ha='right', fontweight='bold')
-    ax.set_ylabel('Training Time (s)', fontsize=11, fontweight='bold')
-    ax.set_title('Average Training Time by Model', fontsize=12, fontweight='bold', pad=20)
-    ax.set_yscale('log')
-    ax.grid(True, alpha=0.3)
-
+def plot_bar_comparison(df, metric, title, xlabel, log_scale=False, save_path=None):
+    # Generic horizontal bar chart for model comparisons
+    style()
+    ml_df, _ = split_by_type(df)
+    model_colors = model_colors(ml_df['model'].unique())
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    values = ml_df.groupby('model')[metric].mean().sort_values()
+    
+    bars = ax.barh(range(len(values)), values.values,
+                   color=[model_colors[m] for m in values.index],
+                   alpha=0.8, edgecolor='white', linewidth=2)
+    
+    ax.set_yticks(range(len(values)))
+    ax.set_yticklabels(values.index)
+    ax.set_xlabel(xlabel, fontweight='bold')
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    
+    if log_scale:
+        ax.set_xscale('log')
+    
     # Add value labels
-    for bar, val in zip(bars, training_times.values):
-        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height(),
-               f'{val:.1f}s', ha='center', va='bottom', fontsize=9, fontweight='bold')
+    for bar, val in zip(bars, values.values):
+        unit = 's' if 'time' in metric.lower() else 'ms' if 'inference' in metric.lower() else ''
+        ax.text(val, bar.get_y() + bar.get_height()/2,
+               f' {val:.2f}{unit}', va='center', fontsize=9)
+    
+    ax.grid(True, alpha=0.2, axis='x')
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
 
-def plot_inference_speed_comparison(results_df, ax):
-    # Plot inference speed comparisons
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    inference_times = ml_df.groupby('model')['inference_time_per_sample'].mean() * 1000
-    inference_times = inference_times.sort_values()
-    colors = ['green' if t < 1 else 'orange' if t < 5 else 'red' for t in inference_times.values]
+def plot_line_comparison(df, x_col, y_col, title, ylabel, save_path=None):
+    # Generic line plot for model comparisons
+    style()
+    ml_df, _ = split_by_type(df)
+    model_colors = model_colors(ml_df['model'].unique())
+    
+    fig, ax = plt.subplots(figsize=(9, 6))
+    
+    for model in ml_df['model'].unique():
+        data = ml_df[ml_df['model'] == model].groupby(x_col)[y_col].mean()
+        ax.plot(data.index, data.values, 'o-', color=model_colors[model],
+               label=model, linewidth=2.5, markersize=7, alpha=0.8)
+    
+    ax.set_xlabel('Degrees of Freedom', fontweight='bold')
+    ax.set_ylabel(ylabel, fontweight='bold')
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.2)
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
 
-    bars = ax.barh(range(len(inference_times)), inference_times.values, 
-                   color=colors, alpha=0.8, edgecolor='white')
-    ax.set_yticks(range(len(inference_times)))
-    ax.set_yticklabels(inference_times.index, fontweight='bold')
-    ax.set_xlabel('Inference Time (ms/sample)', fontsize=11, fontweight='bold')
-    ax.set_title('Inference Speed Ranking', fontsize=12, fontweight='bold', pad=20)
+def plot_ml_vs_traditional(df, metric, title, ylabel, use_bars=True, save_path=None):
+    # Compare ML vs Traditional methods
+    style()
+    colors = colors()
+    ml_df, trad_df = split_by_type(df)
+    
+    fig, ax = plt.subplots(figsize=(9, 6))
+    
+    scale = 1000 if 'inference' in metric else 1
+    ml_means, _ = calculate_stats(ml_df, 'dof', metric, scale)
+    trad_means, _ = calculate_stats(trad_df, 'dof', metric, scale)
+    
+    x = np.array(ml_means.index)
+    
+    if use_bars:
+        width = 0.35
+        ax.bar(x - width/2, ml_means.values, width, label='ML Methods',
+               color=colors['ml'], alpha=0.8, edgecolor='white', linewidth=2)
+        ax.bar(x + width/2, trad_means.values, width, label='Traditional',
+               color=colors['traditional'], alpha=0.8, edgecolor='white', linewidth=2)
+        ax.set_xticks(x)
+    else:
+        ax.plot(x, ml_means.values, 'o-', color=colors['ml'], 
+                linewidth=3, markersize=8, label='ML Methods', alpha=0.9)
+        ax.plot(x, trad_means.values, 's-', color=colors['traditional'],
+                linewidth=3, markersize=8, label='Traditional', alpha=0.9)
+        
+        if 'inference' in metric:
+            ax.set_yscale('log')
+            speedup = (trad_means.values / ml_means.values).mean()
+            ax.text(0.98, 0.02, f'ML is {speedup:.1f}× faster',
+                   transform=ax.transAxes, ha='right', va='bottom',
+                   bbox=dict(boxstyle='round', facecolor=colors['highlight'], alpha=0.3),
+                   fontweight='bold')
+    
+    ax.set_xlabel('Degrees of Freedom', fontweight='bold')
+    ax.set_ylabel(ylabel, fontweight='bold')
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.2)
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
+
+def plot_speedup_factors(df, save_path=None):
+    # Plot speedup factors of ML over traditional
+    style()
+    colors = colors()
+    ml_df, trad_df = split_by_type(df)
+    
+    fig, ax = plt.subplots(figsize=(9, 6))
+    
+    ml_means, _ = calculate_stats(ml_df, 'dof', 'inference_time_per_sample')
+    trad_means, _ = calculate_stats(trad_df, 'dof', 'inference_time_per_sample')
+    
+    speedup = trad_means / ml_means
+    x = speedup.index
+    
+    bars = ax.bar(x, speedup.values, 
+                 color=plt.cm.YlOrRd(speedup.values / speedup.max()),
+                 alpha=0.8, edgecolor='white', linewidth=2)
+    
+    for bar, val in zip(bars, speedup.values):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
+               f'{val:.1f}×', ha='center', va='bottom', fontweight='bold')
+    
+    ax.axhline(y=1, color='gray', linestyle='--', alpha=0.5)
+    ax.set_xlabel('Degrees of Freedom', fontweight='bold')
+    ax.set_ylabel('Speedup Factor (Traditional/ML)', fontweight='bold')
+    ax.set_title('ML Speedup Over Traditional Methods', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.grid(True, alpha=0.2, axis='y')
+    
+    # Add summary
+    ax.text(0.98, 0.98, f'Avg: {speedup.mean():.1f}×\nMax: {speedup.max():.1f}×',
+           transform=ax.transAxes, ha='right', va='top',
+           bbox=dict(boxstyle='round', facecolor=colors['highlight'], alpha=0.3),
+           fontweight='bold')
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
+    return fig
+
+def create_comprehensive_dashboard(df, save_path=None):
+    """6-panel ML model analysis dashboard"""
+    style()
+    ml_df, _ = split_by_type(df)
+    model_colors = model_colors(ml_df['model'].unique())
+    
+    fig = plt.figure(figsize=(14, 10))
+    gs = GridSpec(3, 3, figure=fig, hspace=0.35, wspace=0.4)
+    
+    # Plot 1: Accuracy-Speed Tradeoff (spans 2 columns)
+    ax = fig.add_subplot(gs[0, :2])
+    for model in ml_df['model'].unique():
+        data = ml_df[ml_df['model'] == model]
+        ax.scatter(data['training_time'].mean(), data['joint_rmse'].mean(),
+                  s=100, alpha=0.8, color=model_colors[model], 
+                  edgecolors='white', linewidth=1.5, label=model)
+    ax.set_xlabel('Training Time (s)', fontweight='bold')
+    ax.set_ylabel('Joint RMSE', fontweight='bold')
+    ax.set_title('Accuracy-Speed Tradeoff')
     ax.set_xscale('log')
-    ax.grid(True, alpha=0.3)
-
-def plot_best_model_distribution(results_df, ax):
-    # Plot pie chart of best model distributiona
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
+    ax.legend(loc='best', fontsize=8)
     
-    if 'dof' in ml_df.columns and len(ml_df) > 0:
-        best_per_dof = ml_df.loc[ml_df.groupby('dof')['joint_rmse'].idxmin()]
-        dof_counts = best_per_dof['model'].value_counts()
-
-        colors = plt.cm.tab10(np.linspace(0, 1, len(dof_counts)))
-        wedges, texts, autotexts = ax.pie(dof_counts.values, labels=dof_counts.index, 
-                                         autopct='%1.1f%%', startangle=90, colors=colors, 
-                                         textprops={'fontweight': 'bold'})
-        ax.set_title('Best Model Distribution Across DOFs', fontsize=12, fontweight='bold', pad=20)
-
-def plot_performance_vs_dof(results_df, ax):
-    # Plot performance improvement with increasing DOF
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
+    # Plot 2: RMSE Heatmap
+    ax = fig.add_subplot(gs[0, 2])
+    pivot = ml_df.pivot_table(values='joint_rmse', index='model', columns='dof', aggfunc='mean')
+    im = ax.imshow(pivot.values, cmap='YlOrRd', aspect='auto')
+    ax.set_xticks(range(len(pivot.columns)))
+    ax.set_xticklabels(pivot.columns, fontsize=8)
+    ax.set_yticks(range(len(pivot.index)))
+    ax.set_yticklabels(pivot.index, fontsize=8)
+    ax.set_xlabel('DOF', fontweight='bold')
+    ax.set_title('RMSE Heatmap')
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     
-    for model in ml_df['model'].unique():
-        model_data = ml_df[ml_df['model'] == model].sort_values('dof')
-        if len(model_data) > 1:
-            improvement = (model_data['joint_rmse'].values[:-1] - model_data['joint_rmse'].values[1:]) / model_data['joint_rmse'].values[:-1] * 100
-            ax.plot(model_data['dof'].values[1:], improvement, 'o-', label=model, alpha=0.8, linewidth=2)
-
-    ax.set_xlabel('DOF', fontsize=11, fontweight='bold')
-    ax.set_ylabel('Performance Change (%)', fontsize=11, fontweight='bold')
-    ax.set_title('Performance Change with Increasing DOF', fontsize=12, fontweight='bold', pad=20)
-    ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
-    ax.grid(True, alpha=0.3)
-
-def plot_traditional_vs_ml_speed_comparison(results_df):
-    # Create two plots comparing Traditional vs ML inference speeds across DOF
-    if 'model_type' not in results_df.columns or 'dof' not in results_df.columns:
-        print("Warning: Missing model_type or dof columns. Cannot create traditional vs ML comparison.")
-        return None
-        
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
-    
-    # Get unique DOF values
-    dof_values = sorted(results_df['dof'].unique())
-    
-    if len(dof_values) == 0:
-        print("Warning: No DOF data found.")
-        return None
-    
-    # Define timeout threshold (in ms) - adjust based on your timeout settings
-    timeout_threshold = 1000  # 1000ms = 1s, adjust based on your timeout settings
-    
-    # Plot 1: Average ML vs Average Traditional by DOF
-    ml_avg_times = []
-    trad_avg_times = []
-    
-    for dof in dof_values:
-        dof_data = results_df[results_df['dof'] == dof]
-        
-        # Calculate average inference time for ML models at this DOF
-        ml_data = dof_data[dof_data['model_type'] == 'ML']
-        ml_avg = ml_data['inference_time_per_sample'].mean() * 1000 if len(ml_data) > 0 else 0
-        ml_avg_times.append(ml_avg)
-        
-        # Calculate average inference time for Traditional models at this DOF
-        trad_data = dof_data[dof_data['model_type'] == 'Traditional']
-        trad_avg = trad_data['inference_time_per_sample'].mean() * 1000 if len(trad_data) > 0 else 0
-        trad_avg_times.append(trad_avg)
-    
-    # Plot averaged lines
-    ax1.plot(dof_values, ml_avg_times, 'o-', color='blue', linewidth=3, markersize=8, 
-             label='ML Models (Average)', alpha=0.9)
-    ax1.plot(dof_values, trad_avg_times, 's-', color='red', linewidth=3, markersize=8, 
-             label='Traditional IK (Average)', alpha=0.9)
-    
-    # Add timeout region
-    ax1.axhspan(timeout_threshold, ax1.get_ylim()[1] if max(max(ml_avg_times), max(trad_avg_times)) > timeout_threshold 
-                else timeout_threshold * 2, alpha=0.3, color='red', label='Timeout Error Region')
-    
-    ax1.set_xlabel('DOF', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Inference Time (ms per sample)', fontsize=12, fontweight='bold')
-    ax1.set_title('Average Solve Time: Traditional vs ML Methods', fontsize=14, fontweight='bold', pad=20)
-    ax1.set_yscale('log')
-    ax1.legend(fontsize=11)
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xticks(dof_values)
-    
-    # Add speedup annotation
-    if len(ml_avg_times) > 0 and len(trad_avg_times) > 0:
-        avg_speedup = np.mean([t/m for t, m in zip(trad_avg_times, ml_avg_times) if m > 0])
-        ax1.text(0.02, 0.98, f'Traditional methods are\n{avg_speedup:.1f}x slower on average', 
-                 transform=ax1.transAxes, ha='left', va='top', fontsize=11, fontweight='bold',
-                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    
-    # Plot 2: All Individual Models by DOF
-    ml_models = results_df[results_df['model_type'] == 'ML']['model'].unique()
-    trad_models = results_df[results_df['model_type'] == 'Traditional']['model'].unique()
-    
-    # Define colors
-    ml_colors = plt.cm.Blues(np.linspace(0.4, 1, len(ml_models)))
-    trad_colors = plt.cm.Reds(np.linspace(0.4, 1, len(trad_models)))
-    
-    # Plot ML models
-    for i, model in enumerate(ml_models):
-        model_data = results_df[results_df['model'] == model]
-        if len(model_data) > 0:
-            dofs = model_data['dof'].values
-            times = model_data['inference_time_per_sample'].values * 1000
-            ax2.plot(dofs, times, 'o-', color=ml_colors[i], linewidth=2, markersize=6, 
-                     label=f'{model} (ML)', alpha=0.8)
-    
-    # Plot Traditional models
-    for i, model in enumerate(trad_models):
-        model_data = results_df[results_df['model'] == model]
-        if len(model_data) > 0:
-            dofs = model_data['dof'].values
-            times = model_data['inference_time_per_sample'].values * 1000
-            ax2.plot(dofs, times, 's-', color=trad_colors[i], linewidth=2, markersize=6, 
-                     label=f'{model} (Traditional)', alpha=0.8)
-    
-    # Add timeout region
-    y_max = results_df['inference_time_per_sample'].max() * 1000
-    timeout_upper = max(timeout_threshold * 2, y_max * 1.2)
-    ax2.axhspan(timeout_threshold, timeout_upper, alpha=0.3, color='red', label='Timeout Error Region')
-    
-    ax2.set_xlabel('DOF', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Inference Time (ms per sample)', fontsize=12, fontweight='bold')
-    ax2.set_title('Individual Model Performance Across DOF', fontsize=14, fontweight='bold', pad=20)
-    ax2.set_yscale('log')
-    ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xticks(dof_values)
-    
-    # Add timeout threshold line
-    ax1.axhline(y=timeout_threshold, color='darkred', linestyle='--', alpha=0.8, linewidth=2)
-    ax2.axhline(y=timeout_threshold, color='darkred', linestyle='--', alpha=0.8, linewidth=2)
-    
-    # Add text annotation for timeout line
-    ax1.text(min(dof_values), timeout_threshold * 1.1, 'Timeout Threshold', 
-             fontsize=10, fontweight='bold', color='darkred')
-    ax2.text(min(dof_values), timeout_threshold * 1.1, 'Timeout Threshold', 
-             fontsize=10, fontweight='bold', color='darkred')
-    
-    plt.tight_layout()
-    return fig
-
-def plot_3d_tradeoff_analysis(results_df, model_colors):
-    # 3D plot showing DOF vs Inference Speed vs Joint RMSE
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    
-    fig = plt.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111, projection='3d')
-
-    for model in ml_df['model'].unique():
-        model_data = ml_df[ml_df['model'] == model]
-        x = model_data['dof']
-        y = model_data['inference_time_per_sample'] * 1000  # Convert to ms
-        z = model_data['joint_rmse']
-
-        ax.scatter(x, y, z, c=[model_colors.get(model, 'blue')], s=80, alpha=0.8,
-                  label=model, edgecolors='white', linewidth=1)
-
-    ax.set_xlabel('DOF', fontsize=11, fontweight='bold')
-    ax.set_ylabel('Inference Time (ms)', fontsize=11, fontweight='bold')
-    ax.set_zlabel('Joint RMSE', fontsize=11, fontweight='bold')
-    ax.set_title('3D Model Performance Tradeoffs\n(DOF vs Speed vs Accuracy)',
-                fontsize=14, fontweight='bold', pad=20)
-
-    ax.legend(bbox_to_anchor=(1.15, 1), loc='upper left')
-    plt.tight_layout()
-    return fig
-
-def plot_pareto_frontier_analysis(results_df, model_colors):
-    # Create Pareto frontier analysis for accuracy vs inference speed
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    # Calculate average metrics per model
-    model_metrics = ml_df.groupby('model').agg({
-        'joint_rmse': 'mean',
-        'inference_time_per_sample': 'mean'
-    }).reset_index()
-
-    # Convert to ms
-    model_metrics['inference_time_ms'] = model_metrics['inference_time_per_sample'] * 1000
-
-    # Plot all models
-    for _, row in model_metrics.iterrows():
-        ax.scatter(row['inference_time_ms'], row['joint_rmse'],
-                  s=150, alpha=0.8, color=model_colors.get(row['model'], 'blue'),
-                  edgecolors='white', linewidth=2, label=row['model'])
-        ax.annotate(row['model'], (row['inference_time_ms'], row['joint_rmse']),
-                   xytext=(8, 8), textcoords='offset points',
-                   fontsize=10, fontweight='bold')
-
-    # Find Pareto frontier (minimize both inference time and RMSE)
-    points = model_metrics[['inference_time_ms', 'joint_rmse']].values
-    pareto_front = []
-
-    for i, point in enumerate(points):
-        dominated = False
-        for other_point in points:
-            if (other_point[0] <= point[0] and other_point[1] <= point[1] and
-                (other_point[0] < point[0] or other_point[1] < point[1])):
-                dominated = True
-                break
-        if not dominated:
-            pareto_front.append(i)
-
-    # Plot Pareto frontier
-    if len(pareto_front) > 1:
-        pareto_points = points[pareto_front]
-        sorted_indices = np.argsort(pareto_points[:, 0])
-        pareto_sorted = pareto_points[sorted_indices]
-        ax.plot(pareto_sorted[:, 0], pareto_sorted[:, 1], 'r--',
-               linewidth=3, alpha=0.8, label='Pareto Frontier')
-
-    ax.set_xlabel('Inference Time (ms)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Joint RMSE (lower is better)', fontsize=12, fontweight='bold')
-    ax.set_title('Pareto Frontier Analysis: Accuracy vs Speed Tradeoff',
-                fontsize=14, fontweight='bold', pad=20)
+    # Plot 3: Training Time
+    ax = fig.add_subplot(gs[1, 0])
+    times = ml_df.groupby('model')['training_time'].mean().sort_values()
+    ax.barh(range(len(times)), times.values,
+           color=[model_colors[m] for m in times.index], alpha=0.8)
+    ax.set_yticks(range(len(times)))
+    ax.set_yticklabels(times.index, fontsize=8)
+    ax.set_xlabel('Training Time (s)', fontweight='bold')
+    ax.set_title('Training Duration')
     ax.set_xscale('log')
-    ax.grid(True, alpha=0.3)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    # Plot 4: Inference Speed
+    ax = fig.add_subplot(gs[1, 1])
+    inference = ml_df.groupby('model')['inference_time_per_sample'].mean() * 1000
+    inference = inference.sort_values()
+    ax.barh(range(len(inference)), inference.values,
+           color=[model_colors[m] for m in inference.index], alpha=0.8)
+    ax.set_yticks(range(len(inference)))
+    ax.set_yticklabels(inference.index, fontsize=8)
+    ax.set_xlabel('Inference (ms)', fontweight='bold')
+    ax.set_title('Inference Speed')
+    ax.set_xscale('log')
+    
+    # Plot 5: Performance vs DOF
+    ax = fig.add_subplot(gs[1, 2])
+    for model in ml_df['model'].unique():
+        data = ml_df[ml_df['model'] == model].groupby('dof')['joint_rmse'].mean()
+        ax.plot(data.index, data.values, 'o-', color=model_colors[model],
+               label=model, linewidth=2, markersize=5, alpha=0.8)
+    ax.set_xlabel('DOF', fontweight='bold')
+    ax.set_ylabel('RMSE', fontweight='bold')
+    ax.set_title('Accuracy vs DOF')
+    ax.legend(loc='best', fontsize=7)
+    
+    # Plot 6: Summary Table
+    ax = fig.add_subplot(gs[2, :])
+    ax.axis('tight')
+    ax.axis('off')
+    
+    summary = [[model, 
+                f"{ml_df[ml_df['model']==model]['joint_rmse'].mean():.4f}",
+                f"{ml_df[ml_df['model']==model]['training_time'].mean():.2f}",
+                f"{ml_df[ml_df['model']==model]['inference_time_per_sample'].mean()*1000:.2f}"]
+               for model in ml_df['model'].unique()]
+    
+    table = ax.table(cellText=summary,
+                    colLabels=['Model', 'Avg RMSE', 'Train (s)', 'Inference (ms)'],
+                    cellLoc='center', loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 1.5)
+    
+    fig.suptitle('Machine Learning Model Performance Analysis', fontsize=14, fontweight='bold')
+    
     plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, format='pdf', dpi=300, bbox_inches='tight')
     return fig
 
-def plot_variance_analysis(results_df, model_colors):
-    # Create error bar plots showing model stability across DOF
-    ml_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
+def generate_all_figures(df, output_dir='./figures/'):
+    # Generate all figures
+    import os
+    os.makedirs(output_dir, exist_ok=True)
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-
-    # Joint RMSE variance across DOF
-    for model in ml_df['model'].unique():
-        model_data = ml_df[ml_df['model'] == model]
-        if len(model_data) > 0 and 'dof' in model_data.columns:
-            dof_stats = model_data.groupby('dof')['joint_rmse'].agg(['mean', 'std']).reset_index()
-
-            ax1.errorbar(dof_stats['dof'], dof_stats['mean'], yerr=dof_stats['std'],
-                        marker='o', linewidth=2, markersize=6, alpha=0.8,
-                        color=model_colors.get(model, 'blue'), label=model, capsize=5)
-
-    ax1.set_xlabel('DOF', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Joint RMSE', fontsize=12, fontweight='bold')
-    ax1.set_title('Model Stability: RMSE vs DOF', fontsize=12, fontweight='bold', pad=20)
-    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax1.grid(True, alpha=0.3)
-
-    # Training time variance across DOF
-    for model in ml_df['model'].unique():
-        model_data = ml_df[ml_df['model'] == model]
-        if len(model_data) > 0 and 'dof' in model_data.columns:
-            dof_stats = model_data.groupby('dof')['training_time'].agg(['mean', 'std']).reset_index()
-
-            ax2.errorbar(dof_stats['dof'], dof_stats['mean'], yerr=dof_stats['std'],
-                        marker='s', linewidth=2, markersize=6, alpha=0.8,
-                        color=model_colors.get(model, 'blue'), label=model, capsize=5)
-
-    ax2.set_xlabel('DOF', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Training Time (s)', fontsize=12, fontweight='bold')
-    ax2.set_title('Model Stability: Training Time vs DOF', fontsize=12, fontweight='bold', pad=20)
-    ax2.set_yscale('log')
-    ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax2.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    return fig
-
-def create_comprehensive_dashboard(results_df, save_path=None):
-    # Create the main comprehensive analysis dashboard
-    setup_plot_style()
+    print("Generating Academic Research Figures")
+    print("=" * 60)
     
-    # Filter for ML models for consistency with original plots
-    ml_results_df = results_df[results_df['model_type'] == 'ML'] if 'model_type' in results_df.columns else results_df
-    model_colors = get_model_colors(ml_results_df)
-
-    # Main dashboard
-    fig_main = plt.figure(figsize=(20, 12))
-    gs = fig_main.add_gridspec(2, 3, hspace=0.35, wspace=0.35)
-    fig_main.suptitle('Model Performance Analysis Dashboard', fontsize=16, fontweight='bold', y=0.95)
-
-    # Create all subplots
-    ax1 = fig_main.add_subplot(gs[0, 0])
-    plot_accuracy_vs_speed_tradeoff(ml_results_df, ax1, model_colors)
-
-    ax2 = fig_main.add_subplot(gs[0, 1])
-    plot_performance_heatmap(ml_results_df, ax2)
-
-    ax3 = fig_main.add_subplot(gs[0, 2])
-    plot_training_time_distribution(ml_results_df, ax3)
-
-    ax4 = fig_main.add_subplot(gs[1, 0])
-    plot_inference_speed_comparison(ml_results_df, ax4)
-
-    ax5 = fig_main.add_subplot(gs[1, 1])
-    plot_best_model_distribution(ml_results_df, ax5)
-
-    ax6 = fig_main.add_subplot(gs[1, 2])
-    plot_performance_vs_dof(ml_results_df, ax6)
-
-    if save_path:
-        plt.savefig(save_path / 'comprehensive_analysis.png', dpi=150, bbox_inches='tight')
+    # Individual plots
+    plots = [
+        ("Accuracy-Speed Tradeoff", 
+         lambda: plot_accuracy_speed_tradeoff(df, f"{output_dir}/accuracy_speed_tradeoff.pdf")),
+        ("RMSE Heatmap", 
+         lambda: plot_rmse_heatmap(df, f"{output_dir}/rmse_heatmap.pdf")),
+        ("Training Time Distribution", 
+         lambda: plot_bar_comparison(df, 'training_time', 'Training Duration', 'Time (s)', 
+                                    True, f"{output_dir}/training_time.pdf")),
+        ("Inference Speed Ranking", 
+         lambda: plot_bar_comparison(df, 'inference_time_per_sample', 'Inference Speed', 
+                                    'Time (ms)', True, f"{output_dir}/inference_speed.pdf")),
+        ("Accuracy vs DOF", 
+         lambda: plot_line_comparison(df, 'dof', 'joint_rmse', 'Accuracy vs DOF', 
+                                     'Joint RMSE', f"{output_dir}/accuracy_vs_dof.pdf")),
+        ("ML vs Traditional Accuracy", 
+         lambda: plot_ml_vs_traditional(df, 'joint_rmse', 'Accuracy Comparison', 
+                                       'Joint RMSE', True, f"{output_dir}/ml_vs_trad_accuracy.pdf")),
+        ("ML vs Traditional Speed", 
+         lambda: plot_ml_vs_traditional(df, 'inference_time_per_sample', 'Speed Comparison', 
+                                       'Inference Time (ms)', False, f"{output_dir}/ml_vs_trad_speed.pdf")),
+        ("Speedup Factors", 
+         lambda: plot_speedup_factors(df, f"{output_dir}/speedup_factors.pdf")),
+        ("Comprehensive Dashboard", 
+         lambda: create_comprehensive_dashboard(df, f"{output_dir}/comprehensive_analysis.pdf"))
+    ]
     
-    return fig_main
+    for name, func in plots:
+        print(f"  ✓ {name}")
+        func()
+    
+    print(f"\n✅ Generated {len(plots)} PDF files in {output_dir}")
+    print("\nAll figures use:")
+    print("  • Professional academic style")
+    print("  • Inferno-inspired color scheme")
+    print("  • 300 DPI resolution")
+    
+    return True
 
-def generate_all_visualizations(results_df, save_path=None):
-    # Generate all visualization plots and return them as a dictionary
-    setup_plot_style()
-    
-    plots = {}
-    model_colors = get_model_colors(results_df)
-    
-    # Main comprehensive dashboard
-    plots['main_dashboard'] = create_comprehensive_dashboard(results_df, save_path)
-    
-    # Traditional vs ML comparison (only if traditional data exists)
-    if 'model_type' in results_df.columns:
-        plots['traditional_vs_ml'] = plot_traditional_vs_ml_speed_comparison(results_df)
-        if save_path and plots['traditional_vs_ml']:
-            plots['traditional_vs_ml'].savefig(save_path / 'traditional_vs_ml_comparison.png', 
-                                             dpi=150, bbox_inches='tight')
-    
-    # Advanced visualizations
-    plots['3d_tradeoff'] = plot_3d_tradeoff_analysis(results_df, model_colors)
-    if save_path:
-        plots['3d_tradeoff'].savefig(save_path / '3d_tradeoff_analysis.png', dpi=150, bbox_inches='tight')
-    
-    plots['pareto_frontier'] = plot_pareto_frontier_analysis(results_df, model_colors)
-    if save_path:
-        plots['pareto_frontier'].savefig(save_path / 'pareto_frontier_analysis.png', dpi=150, bbox_inches='tight')
-    
-    plots['variance_analysis'] = plot_variance_analysis(results_df, model_colors)
-    if save_path:
-        plots['variance_analysis'].savefig(save_path / 'variance_analysis.png', dpi=150, bbox_inches='tight')
-    
-    return plots
+if __name__ == "__main__":
+    print("Academic figure generator ready!")
+    print("Usage: generate_all_figures(your_dataframe, './output_dir/')")
+    print("\nExpected DataFrame columns:")
+    print("  - model, model_type, dof, joint_rmse")
+    print("  - training_time, inference_time_per_sample")
