@@ -36,7 +36,7 @@ def colors():
         'highlight': '#FFBA08'      # Bright yellow
     }
 
-def colors(models):
+def model_colors(models):
     # Generate colors for individual models using gradient
     n = len(models)
     cmap = plt.cm.YlOrRd
@@ -61,14 +61,14 @@ def plot_accuracy_speed_tradeoff(df, save_path=None):
     # Accuracy vs Speed Tradeoff
     style()
     ml_df, _ = split_by_type(df)
-    colors = colors(ml_df['model'].unique())
+    model_color_map = model_colors(ml_df['model'].unique())
     
     fig, ax = plt.subplots(figsize=(8, 6))
     
     for model in ml_df['model'].unique():
         data = ml_df[ml_df['model'] == model]
         ax.scatter(data['training_time'].mean(), data['joint_rmse'].mean(),
-                  s=120, alpha=0.8, color=colors[model], 
+                  s=120, alpha=0.8, color=model_color_map[model], 
                   edgecolors='white', linewidth=2, label=model)
     
     ax.set_xlabel('Training Time (s)', fontweight='bold')
@@ -112,14 +112,14 @@ def plot_bar_comparison(df, metric, title, xlabel, log_scale=False, save_path=No
     # Generic horizontal bar chart for model comparisons
     style()
     ml_df, _ = split_by_type(df)
-    colors = colors(ml_df['model'].unique())
+    model_color_map = model_colors(ml_df['model'].unique())
     
     fig, ax = plt.subplots(figsize=(8, 6))
     
     values = ml_df.groupby('model')[metric].mean().sort_values()
     
     bars = ax.barh(range(len(values)), values.values,
-                   color=[colors[m] for m in values.index],
+                   color=[model_color_map[m] for m in values.index],
                    alpha=0.8, edgecolor='white', linewidth=2)
     
     ax.set_yticks(range(len(values)))
@@ -147,13 +147,13 @@ def plot_line_comparison(df, x_col, y_col, title, ylabel, save_path=None):
     # Generic line plot for model comparisons
     style()
     ml_df, _ = split_by_type(df)
-    colors = colors(ml_df['model'].unique())
+    model_color_map = model_colors(ml_df['model'].unique())
     
     fig, ax = plt.subplots(figsize=(9, 6))
     
     for model in ml_df['model'].unique():
         data = ml_df[ml_df['model'] == model].groupby(x_col)[y_col].mean()
-        ax.plot(data.index, data.values, 'o-', color=colors[model],
+        ax.plot(data.index, data.values, 'o-', color=model_color_map[model],
                label=model, linewidth=2.5, markersize=7, alpha=0.8)
     
     ax.set_xlabel('Degrees of Freedom', fontweight='bold')
@@ -170,7 +170,7 @@ def plot_line_comparison(df, x_col, y_col, title, ylabel, save_path=None):
 def plot_ml_vs_traditional(df, metric, title, ylabel, use_bars=True, save_path=None):
     # Compare ML vs Traditional methods
     style()
-    colors = colors()
+    color_palette = colors()
     ml_df, trad_df = split_by_type(df)
     
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -184,14 +184,14 @@ def plot_ml_vs_traditional(df, metric, title, ylabel, use_bars=True, save_path=N
     if use_bars:
         width = 0.35
         ax.bar(x - width/2, ml_means.values, width, label='ML Methods',
-               color=colors['ml'], alpha=0.8, edgecolor='white', linewidth=2)
+               color=color_palette['ml'], alpha=0.8, edgecolor='white', linewidth=2)
         ax.bar(x + width/2, trad_means.values, width, label='Traditional',
-               color=colors['traditional'], alpha=0.8, edgecolor='white', linewidth=2)
+               color=color_palette['traditional'], alpha=0.8, edgecolor='white', linewidth=2)
         ax.set_xticks(x)
     else:
-        ax.plot(x, ml_means.values, 'o-', color=colors['ml'], 
+        ax.plot(x, ml_means.values, 'o-', color=color_palette['ml'], 
                 linewidth=3, markersize=8, label='ML Methods', alpha=0.9)
-        ax.plot(x, trad_means.values, 's-', color=colors['traditional'],
+        ax.plot(x, trad_means.values, 's-', color=color_palette['traditional'],
                 linewidth=3, markersize=8, label='Traditional', alpha=0.9)
         
         if 'inference' in metric:
@@ -199,7 +199,7 @@ def plot_ml_vs_traditional(df, metric, title, ylabel, use_bars=True, save_path=N
             speedup = (trad_means.values / ml_means.values).mean()
             ax.text(0.98, 0.02, f'ML is {speedup:.1f}× faster',
                    transform=ax.transAxes, ha='right', va='bottom',
-                   bbox=dict(boxstyle='round', facecolor=colors['highlight'], alpha=0.3),
+                   bbox=dict(boxstyle='round', facecolor=color_palette['highlight'], alpha=0.3),
                    fontweight='bold')
     
     ax.set_xlabel('Degrees of Freedom', fontweight='bold')
@@ -216,7 +216,7 @@ def plot_ml_vs_traditional(df, metric, title, ylabel, use_bars=True, save_path=N
 def plot_speedup_factors(df, save_path=None):
     # Plot speedup factors of ML over traditional
     style()
-    colors = colors()
+    color_palette = colors()
     ml_df, trad_df = split_by_type(df)
     
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -245,7 +245,7 @@ def plot_speedup_factors(df, save_path=None):
     # Add summary
     ax.text(0.98, 0.98, f'Avg: {speedup.mean():.1f}×\nMax: {speedup.max():.1f}×',
            transform=ax.transAxes, ha='right', va='top',
-           bbox=dict(boxstyle='round', facecolor=colors['highlight'], alpha=0.3),
+           bbox=dict(boxstyle='round', facecolor=color_palette['highlight'], alpha=0.3),
            fontweight='bold')
     
     plt.tight_layout()
@@ -257,7 +257,7 @@ def create_comprehensive_dashboard(df, save_path=None):
     """6-panel ML model analysis dashboard"""
     style()
     ml_df, _ = split_by_type(df)
-    colors = colors(ml_df['model'].unique())
+    model_color_map = model_colors(ml_df['model'].unique())
     
     fig = plt.figure(figsize=(14, 10))
     gs = GridSpec(3, 3, figure=fig, hspace=0.35, wspace=0.4)
@@ -267,7 +267,7 @@ def create_comprehensive_dashboard(df, save_path=None):
     for model in ml_df['model'].unique():
         data = ml_df[ml_df['model'] == model]
         ax.scatter(data['training_time'].mean(), data['joint_rmse'].mean(),
-                  s=100, alpha=0.8, color=colors[model], 
+                  s=100, alpha=0.8, color=model_color_map[model], 
                   edgecolors='white', linewidth=1.5, label=model)
     ax.set_xlabel('Training Time (s)', fontweight='bold')
     ax.set_ylabel('Joint RMSE', fontweight='bold')
@@ -291,7 +291,7 @@ def create_comprehensive_dashboard(df, save_path=None):
     ax = fig.add_subplot(gs[1, 0])
     times = ml_df.groupby('model')['training_time'].mean().sort_values()
     ax.barh(range(len(times)), times.values,
-           color=[colors[m] for m in times.index], alpha=0.8)
+           color=[model_color_map[m] for m in times.index], alpha=0.8)
     ax.set_yticks(range(len(times)))
     ax.set_yticklabels(times.index, fontsize=8)
     ax.set_xlabel('Training Time (s)', fontweight='bold')
@@ -303,7 +303,7 @@ def create_comprehensive_dashboard(df, save_path=None):
     inference = ml_df.groupby('model')['inference_time_per_sample'].mean() * 1000
     inference = inference.sort_values()
     ax.barh(range(len(inference)), inference.values,
-           color=[colors[m] for m in inference.index], alpha=0.8)
+           color=[model_color_map[m] for m in inference.index], alpha=0.8)
     ax.set_yticks(range(len(inference)))
     ax.set_yticklabels(inference.index, fontsize=8)
     ax.set_xlabel('Inference (ms)', fontweight='bold')
@@ -314,7 +314,7 @@ def create_comprehensive_dashboard(df, save_path=None):
     ax = fig.add_subplot(gs[1, 2])
     for model in ml_df['model'].unique():
         data = ml_df[ml_df['model'] == model].groupby('dof')['joint_rmse'].mean()
-        ax.plot(data.index, data.values, 'o-', color=colors[model],
+        ax.plot(data.index, data.values, 'o-', color=model_color_map[model],
                label=model, linewidth=2, markersize=5, alpha=0.8)
     ax.set_xlabel('DOF', fontweight='bold')
     ax.set_ylabel('RMSE', fontweight='bold')
